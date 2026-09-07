@@ -12,13 +12,11 @@ fn inst_nop(mut cpu CPU, _ []u8) {
 }
 
 fn inst_ld_hl_n16(mut cpu CPU, data []u8) {
-	cpu.routine_ld_16(data, mut &cpu.r.hl.half.hi, mut &cpu.r.hl.half.lo)
+	cpu.r.hl = cpu.routine_ld_16(data)
 }
 
 fn inst_xor_a_a(mut cpu CPU, _ []u8) {
-	unsafe {
-		cpu.r.af.full = 0
-	}
+	cpu.r.af = 0
 	cpu.set_flag_subtract(false)
 	cpu.set_flag_carry(false)
 	cpu.set_flag_half_carry(false)
@@ -28,13 +26,13 @@ fn inst_xor_a_a(mut cpu CPU, _ []u8) {
 
 fn inst_jp_a16(mut cpu CPU, data []u8) {
 	cpu.clocks += 4
-	mut tmp := u32(memory_bus_read(data, unsafe {cpu.r.pc.full}))
+	mut tmp := u32(memory_bus_read(data, cpu.r.pc))
 	cpu.pc_inc()
 	cpu.clocks += 4
-	tmp |= u32(memory_bus_read(data, unsafe {cpu.r.pc.full})) << 8
+	tmp |= u32(memory_bus_read(data, cpu.r.pc)) << 8
 	cpu.pc_inc()
 	cpu.clocks += 4
-	cpu.r.pc.full = u16(tmp)
+	cpu.r.pc = u16(tmp)
 	cpu.clocks += 4
 }
 
