@@ -47,15 +47,11 @@ fn (mut cpu CPU) execute(program []u8) {
 	}
 }
 
-fn (mut cpu CPU) pc_inc() {
-	cpu.r.pc++
-	cpu.r.pc &= 0xFFFF
-}
-
 fn (mut cpu CPU) routine_ld_n8(data []u8) u8 {
 	cpu.clocks += 4
 	val := memory_bus_read(data, cpu.r.pc)
-	cpu.pc_inc()
+	cpu.r.pc++
+	cpu.r.pc &= 0xFFFF
 	cpu.clocks += 4
 	return val
 }
@@ -63,10 +59,12 @@ fn (mut cpu CPU) routine_ld_n8(data []u8) u8 {
 fn (mut cpu CPU) routine_ld_n16(data []u8) u16 {
 	cpu.clocks += 4
 	lo := memory_bus_read(data, cpu.r.pc)
-	cpu.pc_inc()
+	cpu.r.pc++
+	cpu.r.pc &= 0xFFFF
 	cpu.clocks += 4
 	hi := memory_bus_read(data, cpu.r.pc)
-	cpu.pc_inc()
+	cpu.r.pc++
+	cpu.r.pc &= 0xFFFF
 	cpu.clocks += 4
 	return u16(hi) << 8 | u16(lo)
 }
@@ -207,14 +205,13 @@ fn (mut cpu CPU) routine_rst_n16(data []u8, addr u16) {
 	cpu.clocks += 4
 	cpu.r.sp--
 	cpu.r.sp &= 0xffff
-	pchi := cpu.r.pc & 0xff00 >> 8
+	pchi := cpu.r.pc.hi()
 	cpu.clocks += 4
 	memory_bus_write(data, cpu.r.sp, pchi)
 	cpu.clocks += 4
 	cpu.r.sp--
 	cpu.r.sp &= 0xffff
-	pclo := cpu.r.pc & 0xff
-	memory_bus_write(data, cpu.r.sp, pclo)
+	memory_bus_write(data, cpu.r.sp, cpu.r.pc.lo())
 	cpu.r.pc = addr
 	cpu.clocks += 4
 }
@@ -231,6 +228,95 @@ fn (mut cpu CPU) routine_push_n16(data []u8, reg Register) {
 	cpu.clocks += 4
 	memory_bus_write(data, cpu.r.sp, reg.lo())
 	cpu.clocks += 4
+}
+
+fn (mut cpu CPU) routine_pop_n16(data []u8, reg u16) u16 {
+	cpu.clocks += 4
+	lo := memory_bus_read(data, cpu.r.sp)
+	cpu.r.sp++
+	cpu.r.sp &= 0xffff
+	cpu.clocks += 4
+	hi := memory_bus_read(data, cpu.r.sp)
+	cpu.r.sp++
+	cpu.r.sp &= 0xffff
+	cpu.clocks += 4
+	return (u16(hi) << 8) & u16(lo)
+}
+
+fn (mut cpu CPU) routine_call_cond_a16(data []u8, cond bool) {
+	cpu.clocks += 4
+	if cond {
+		mut tmp := u32(memory_bus_read(data, cpu.r.pc))
+		cpu.r.pc++
+		cpu.clocks += 4
+		tmp |= u32(memory_bus_read(data, cpu.r.pc)) << 8
+		cpu.r.pc++
+		cpu.clocks += 4
+		cpu.r.sp--
+		cpu.r.sp &= 0xffff
+		pchi := cpu.r.pc.hi()
+		cpu.clocks += 4
+		memory_bus_write(data, cpu.r.sp, pchi)
+		cpu.clocks += 4
+		cpu.r.sp--
+		cpu.r.sp &= 0xffff
+		memory_bus_write(data, cpu.r.sp, cpu.r.pc.lo())
+		cpu.r.pc = u16(tmp)
+		cpu.clocks += 4
+	} else {
+		cpu.r.pc++
+		cpu.clocks += 4
+		cpu.r.pc++
+		cpu.clocks += 4
+		cpu.r.pc &= 0xffff
+	}
+}
+
+fn (mut cpu CPU) routine_ret_cond(data []u8, cond bool) {
+	cpu.clocks += 4
+	if cond {
+		tmp := u16(memory_bus_read(data, cpu.r.sp))
+		cpu.r.sp++
+		cpu.r.sp &= 0xffff
+		cpu.clocks += 4
+		cpu.r.pc = tmp
+		cpu.clocks += 4
+		cpu.clocks += 4
+	} else {
+		cpu.clocks += 4
+	}
+}
+
+fn (mut cpu CPU) routine_jp_cond_a16(data []u8, cond bool) {
+	cpu.clocks += 4
+	if cond {
+		mut tmp := u16(memory_bus_read(data, cpu.r.pc))
+		cpu.r.pc++
+		cpu.clocks += 4
+		tmp |= u16(memory_bus_read(data, cpu.r.pc)) << 8
+		cpu.clocks += 4
+		cpu.r.pc = tmp
+		cpu.clocks += 4
+	} else {
+		cpu.r.pc++
+		cpu.clocks += 4
+		cpu.r.pc++
+		cpu.clocks += 4
+	}
+}
+
+fn (mut cpu CPU) routine_jr_cond_e8(data []u8, cond bool) {
+	cpu.clocks += 4
+	if cond {
+		tmp := memory_bus_read(data, cpu.r.pc)
+		cpu.r.pc++
+		cpu.clocks += 4
+		cpu.r.pc = (cpu.r.pc + tmp) & 0xffff
+		cpu.clocks += 4
+	} else {
+		cpu.r.pc++
+		cpu.clocks += 4
+	}
 }
 
 fn (mut cpu CPU) set_flag_zero(val bool) {
