@@ -2,7 +2,7 @@ module main
 
 // 0x00
 fn inst_nop(mut cpu CPU, _ []u8) {
-	cpu.clocks += 4
+	cpu.advance_clocks(4)
 }
 
 // 0x01
@@ -35,6 +35,32 @@ fn inst_ld_b_n8(mut cpu CPU, data []u8) {
 	cpu.r.bc.set_hi(cpu.routine_ld_n8(data))
 }
 
+// 0x07
+fn inst_rlca(mut cpu CPU, _ []u8) {
+	cpu.advance_clocks(4)
+	cpu.set_flag_zero(false)
+	cpu.set_flag_subtract(false)
+	cpu.set_flag_half_carry(false)
+	cpu.set_flag_carry(cpu.r.af.hi() & 0x80 != 0)
+	cpu.r.af.set_hi(cpu.r.af.hi() << 1 | u8(cpu.get_flag_carry()))
+}
+
+// 0x08
+fn inst_ld_a16_sp(mut cpu CPU, data []u8) {
+	cpu.advance_clocks(4)
+	mut tmp := u16(cpu.mbus.read(data, cpu.r.pc))
+	cpu.r.pc++
+	cpu.advance_clocks(4)
+	tmp |= u16(cpu.mbus.read(data, cpu.r.pc)) << 8
+	cpu.r.pc++
+	cpu.advance_clocks(4)
+	cpu.mbus.write(data, tmp, cpu.r.sp.lo())
+	tmp++
+	cpu.advance_clocks(4)
+	cpu.mbus.write(data, tmp, cpu.r.sp.hi())
+	cpu.advance_clocks(4)
+}
+
 // 0x09
 fn inst_add_hl_bc(mut cpu CPU, _ []u8) {
 	cpu.routine_add_hl16(cpu.r.bc)
@@ -50,7 +76,7 @@ fn inst_dec_bc(mut cpu CPU, _ []u8) {
 	cpu.r.bc = cpu.routine_dec_n16(cpu.r.bc)
 }
 
-// 0x0c
+// 0x0C
 fn inst_inc_c(mut cpu CPU, _ []u8) {
 	cpu.r.bc.set_lo(cpu.routine_inc_n8(cpu.r.bc.lo()))
 }
@@ -63,6 +89,29 @@ fn inst_dec_c(mut cpu CPU, _ []u8) {
 // 0x0E
 fn inst_ld_c_n8(mut cpu CPU, data []u8) {
 	cpu.r.bc.set_lo(cpu.routine_ld_n8(data))
+}
+
+// 0x0F
+fn inst_rrca(mut cpu CPU, _ []u8) {
+	cpu.advance_clocks(4)
+	cpu.set_flag_zero(false)
+	cpu.set_flag_subtract(false)
+	cpu.set_flag_half_carry(false)
+	cpu.set_flag_carry(cpu.r.af.hi() & 0x01 != 0)
+	cpu.r.af.set_hi(cpu.r.af.hi() >> 1 | u8(cpu.get_flag_carry()) << 7)
+}
+
+// 0x10
+fn inst_stop(mut cpu CPU, data []u8) {
+	cpu.advance_clocks(4)
+	r := cpu.mbus.read(data, cpu.r.pc)
+	cpu.r.pc++
+	if r != 0 {
+		println('CPU: corrupted STOP at PC 0x${cpu.r.pc:x}, should have operand 0x00')
+	}
+	cpu.advance_clocks(4)
+	cpu.timer.on_div_write(0)
+	cpu.timer.halt_type = .stop
 }
 
 // 0x11
@@ -95,6 +144,27 @@ fn inst_ld_d_n8(mut cpu CPU, data []u8) {
 	cpu.r.de.set_hi(cpu.routine_ld_n8(data))
 }
 
+// 0x17
+fn inst_rla(mut cpu CPU, _ []u8) {
+	cpu.advance_clocks(4)
+	cpu.set_flag_zero(false)
+	cpu.set_flag_subtract(false)
+	cpu.set_flag_half_carry(false)
+	tmp := cpu.get_flag_carry()
+	cpu.set_flag_carry(cpu.r.af.hi() & 0x80 != 0)
+	cpu.r.af.set_hi(cpu.r.af.hi() << 1 | u8(tmp))
+}
+
+// 0x18
+fn inst_jr_e8(mut cpu CPU, data []u8) {
+	cpu.advance_clocks(4)
+	tmp := cpu.mbus.read(data, cpu.r.pc)
+	cpu.r.pc++
+	cpu.advance_clocks(4)
+	cpu.r.pc = (cpu.r.pc + tmp) & 0xffff
+	cpu.advance_clocks(4)
+}
+
 // 0x19
 fn inst_add_hl_de(mut cpu CPU, _ []u8) {
 	cpu.routine_add_hl16(cpu.r.de)
@@ -125,6 +195,17 @@ fn inst_ld_e_n8(mut cpu CPU, data []u8) {
 	cpu.r.de.set_lo(cpu.routine_ld_n8(data))
 }
 
+// 0x1F
+fn inst_rra(mut cpu CPU, _ []u8) {
+	cpu.advance_clocks(4)
+	cpu.set_flag_zero(false)
+	cpu.set_flag_subtract(false)
+	cpu.set_flag_half_carry(false)
+	tmp := cpu.get_flag_carry()
+	cpu.set_flag_carry(cpu.r.af.hi() & 0x01 != 0)
+	cpu.r.af.set_hi(cpu.r.af.hi() >> 1 | u8(tmp) << 7)
+}
+
 // 0x20
 fn inst_jr_nz_e8(mut cpu CPU, data []u8) {
 	cpu.routine_jr_cond_e8(data, !cpu.get_flag_zero())
@@ -136,8 +217,11 @@ fn inst_ld_hl_n16(mut cpu CPU, data []u8) {
 }
 
 // 0x22
-fn inst_ld_hl_a(mut cpu CPU, data []u8) {
-	cpu.routine_ld_ptr8(data, cpu.r.hl, cpu.r.af.hi())
+fn inst_ldi_hl_a(mut cpu CPU, data []u8) {
+	cpu.advance_clocks(4)
+	cpu.mbus.write(data, cpu.r.hl, cpu.r.af.hi())
+	cpu.r.hl = (cpu.r.hl + 1) & 0xffff
+	cpu.advance_clocks(4)
 }
 
 // 0x23
@@ -160,6 +244,29 @@ fn inst_ld_h_n8(mut cpu CPU, data []u8) {
 	cpu.r.hl.set_hi(cpu.routine_ld_n8(data))
 }
 
+// 0x27
+fn inst_daa(mut cpu CPU, data []u8) {
+	if cpu.get_flag_subtract() {
+		if cpu.get_flag_carry() {
+			cpu.r.af.set_hi(cpu.r.af.hi() - 0x60)
+		}
+		if cpu.get_flag_half_carry() {
+			cpu.r.af.set_hi(cpu.r.af.hi() - 0x6)
+		}
+	} else {
+		if cpu.get_flag_carry() || cpu.r.af.hi() > 0x99 {
+			cpu.r.af.set_hi(cpu.r.af.hi() + 0x60)
+			cpu.set_flag_carry(true)
+		}
+		if cpu.get_flag_half_carry() || cpu.r.af.hi() & 0x0f > 0x09 {
+			cpu.r.af.set_hi(cpu.r.af.hi() + 0x6)
+		}
+	}
+	cpu.set_flag_zero(cpu.r.af.hi() == 0)
+	cpu.set_flag_half_carry(false)
+	cpu.advance_clocks(4)
+}
+
 // 0x28
 fn inst_jr_z_e8(mut cpu CPU, data []u8) {
 	cpu.routine_jr_cond_e8(data, cpu.get_flag_zero())
@@ -167,7 +274,19 @@ fn inst_jr_z_e8(mut cpu CPU, data []u8) {
 
 // 0x29
 fn inst_add_hl_hl(mut cpu CPU, _ []u8) {
-	cpu.routine_add_hl16(cpu.r.hl)
+	cpu.advance_clocks(4)
+	cpu.set_flag_subtract(false)
+	cpu.set_flag_carry(cpu.r.hl & 0x0800 != 0)
+	cpu.advance_clocks(4)
+	cpu.r.hl = (cpu.r.hl << 1) & 0xffff
+}
+
+// 0x2A
+fn inst_ldi_a_hl(mut cpu CPU, data []u8) {
+	cpu.advance_clocks(4)
+	cpu.r.af.set_hi(cpu.mbus.read(data, cpu.r.hl))
+	cpu.advance_clocks(4)
+	cpu.r.hl = (cpu.r.hl + 1) & 0xffff
 }
 
 // 0x2B
@@ -190,6 +309,14 @@ fn inst_ld_l_n8(mut cpu CPU, data []u8) {
 	cpu.r.hl.set_lo(cpu.routine_ld_n8(data))
 }
 
+// 0x2F
+fn inst_cpl(mut cpu CPU, data []u8) {
+	cpu.advance_clocks(4)
+	cpu.set_flag_subtract(true)
+	cpu.set_flag_half_carry(true)
+	cpu.r.af.set_hi(~cpu.r.af.hi())
+}
+
 // 0x30
 fn inst_jr_nc_e8(mut cpu CPU, data []u8) {
 	cpu.routine_jr_cond_e8(data, !cpu.get_flag_carry())
@@ -202,10 +329,10 @@ fn inst_ld_sp_n16(mut cpu CPU, data []u8) {
 
 // 0x32
 fn inst_ldd_hl_a(mut cpu CPU, data []u8) {
-	cpu.clocks += 4
-	memory_bus_write(data, cpu.r.hl, cpu.r.af.hi())
+	cpu.advance_clocks(4)
+	cpu.mbus.write(data, cpu.r.hl, cpu.r.af.hi())
 	cpu.r.hl = (cpu.r.hl - 1) & 0xffff
-	cpu.clocks += 4
+	cpu.advance_clocks(4)
 }
 
 // 0x33
@@ -214,18 +341,47 @@ fn inst_inc_sp(mut cpu CPU, _ []u8) {
 }
 
 // 0x34
-fn inst_inc_hl(mut cpu CPU, _ []u8) {
-	cpu.r.hl = cpu.routine_inc_n16(cpu.r.hl)
+fn inst_inci_hl(mut cpu CPU, data []u8) {
+	cpu.advance_clocks(4)
+	mut tmp := cpu.mbus.read(data, cpu.r.hl)
+	cpu.advance_clocks(4)
+	cpu.set_flag_subtract(false)
+	cpu.set_flag_half_carry(tmp & 0xf == 0)
+	tmp = (tmp + 1) & 0xff
+	cpu.set_flag_zero(tmp == 0)
+	cpu.advance_clocks(4)
+	cpu.mbus.write(data, cpu.r.hl, tmp)
 }
 
 // 0x35
-fn inst_dec_hl(mut cpu CPU, _ []u8) {
-	cpu.r.hl = cpu.routine_dec_n16(cpu.r.hl)
+fn inst_deci_hl(mut cpu CPU, data []u8) {
+	cpu.advance_clocks(4)
+	mut tmp := cpu.mbus.read(data, cpu.r.hl)
+	cpu.advance_clocks(4)
+	cpu.set_flag_subtract(false)
+	cpu.set_flag_half_carry(tmp & 0xf == 0)
+	tmp = (tmp - 1) & 0xff
+	cpu.set_flag_zero(tmp == 0)
+	cpu.advance_clocks(4)
+	cpu.mbus.write(data, cpu.r.hl, tmp)
 }
 
 // 0x36
-fn inst_ld_hl_n8(mut cpu CPU, data []u8) {
-	cpu.r.hl = cpu.routine_ld_n8(data)
+fn inst_ldi_hl_n8(mut cpu CPU, data []u8) {
+	cpu.advance_clocks(4)
+	tmp := cpu.mbus.read(data, cpu.r.pc)
+	cpu.r.pc++
+	cpu.advance_clocks(4)
+	cpu.mbus.write(data, cpu.r.hl, tmp)
+	cpu.advance_clocks(4)
+}
+
+// 0x37
+fn inst_scf(mut cpu CPU, _ []u8) {
+	cpu.set_flag_subtract(false)
+	cpu.set_flag_half_carry(false)
+	cpu.set_flag_carry(true)
+	cpu.advance_clocks(4)
 }
 
 // 0x38
@@ -236,6 +392,14 @@ fn inst_jr_c_e8(mut cpu CPU, data []u8) {
 // 0x39
 fn inst_add_hl_sp(mut cpu CPU, _ []u8) {
 	cpu.routine_add_hl16(cpu.r.sp)
+}
+
+// 0x3A
+fn inst_ldd_a_hl(mut cpu CPU, data []u8) {
+	cpu.advance_clocks(4)
+	cpu.r.af.set_hi(cpu.mbus.read(data, cpu.r.hl))
+	cpu.advance_clocks(4)
+	cpu.r.hl = (cpu.r.hl - 1) & 0xffff
 }
 
 // 0x3B
@@ -258,38 +422,46 @@ fn inst_ld_a_n8(mut cpu CPU, data []u8) {
 	cpu.r.af.set_hi(cpu.routine_ld_n8(data))
 }
 
+// 0x3F
+fn inst_ccf(mut cpu CPU, _ []u8) {
+	cpu.advance_clocks(4)
+	cpu.set_flag_carry(!cpu.get_flag_carry())
+	cpu.set_flag_subtract(false)
+	cpu.set_flag_half_carry(false)
+}
+
 // 0x40
 fn inst_ld_b_b(mut cpu CPU, _ []u8) {
-	cpu.clocks += 4
+	cpu.advance_clocks(4)
 }
 
 // 0x41
 fn inst_ld_b_c(mut cpu CPU, _ []u8) {
-	cpu.clocks += 4
+	cpu.advance_clocks(4)
 	cpu.r.bc.set_hi(cpu.r.bc.lo())
 }
 
 // 0x42
 fn inst_ld_b_d(mut cpu CPU, _ []u8) {
-	cpu.clocks += 4
+	cpu.advance_clocks(4)
 	cpu.r.bc.set_hi(cpu.r.de.hi())
 }
 
 // 0x43
 fn inst_ld_b_e(mut cpu CPU, _ []u8) {
-	cpu.clocks += 4
+	cpu.advance_clocks(4)
 	cpu.r.bc.set_hi(cpu.r.de.lo())
 }
 
 // 0x44
 fn inst_ld_b_h(mut cpu CPU, _ []u8) {
-	cpu.clocks += 4
+	cpu.advance_clocks(4)
 	cpu.r.bc.set_hi(cpu.r.hl.hi())
 }
 
 // 0x45
 fn inst_ld_b_l(mut cpu CPU, _ []u8) {
-	cpu.clocks += 4
+	cpu.advance_clocks(4)
 	cpu.r.bc.set_hi(cpu.r.hl.lo())
 }
 
@@ -300,42 +472,42 @@ fn inst_ld_b_hl(mut cpu CPU, data []u8) {
 
 // 0x47
 fn inst_ld_b_a(mut cpu CPU, _ []u8) {
-	cpu.clocks += 4
+	cpu.advance_clocks(4)
 	cpu.r.bc.set_hi(cpu.r.af.hi())
 }
 
 // 0x48
 fn inst_ld_c_b(mut cpu CPU, _ []u8) {
-	cpu.clocks += 4
+	cpu.advance_clocks(4)
 	cpu.r.bc.set_lo(cpu.r.bc.hi())
 }
 
 // 0x49
 fn inst_ld_c_c(mut cpu CPU, _ []u8) {
-	cpu.clocks += 4
+	cpu.advance_clocks(4)
 }
 
 // 0x4A
 fn inst_ld_c_d(mut cpu CPU, _ []u8) {
-	cpu.clocks += 4
+	cpu.advance_clocks(4)
 	cpu.r.bc.set_lo(cpu.r.de.hi())
 }
 
 // 0x4B
 fn inst_ld_c_e(mut cpu CPU, _ []u8) {
-	cpu.clocks += 4
+	cpu.advance_clocks(4)
 	cpu.r.bc.set_lo(cpu.r.de.lo())
 }
 
 // 0x4C
 fn inst_ld_c_h(mut cpu CPU, _ []u8) {
-	cpu.clocks += 4
+	cpu.advance_clocks(4)
 	cpu.r.bc.set_lo(cpu.r.hl.hi())
 }
 
 // 0x4C
 fn inst_ld_c_l(mut cpu CPU, _ []u8) {
-	cpu.clocks += 4
+	cpu.advance_clocks(4)
 	cpu.r.bc.set_lo(cpu.r.hl.lo())
 }
 
@@ -346,42 +518,42 @@ fn inst_ld_c_hl(mut cpu CPU, data []u8) {
 
 // 0x4F
 fn inst_ld_c_a(mut cpu CPU, _ []u8) {
-	cpu.clocks += 4
+	cpu.advance_clocks(4)
 	cpu.r.bc.set_lo(cpu.r.af.hi())
 }
 
 // 0x50
 fn inst_ld_d_b(mut cpu CPU, _ []u8) {
-	cpu.clocks += 4
+	cpu.advance_clocks(4)
 	cpu.r.de.set_hi(cpu.r.bc.hi())
 }
 
 // 0x51
 fn inst_ld_d_c(mut cpu CPU, _ []u8) {
-	cpu.clocks += 4
+	cpu.advance_clocks(4)
 	cpu.r.de.set_hi(cpu.r.bc.lo())
 }
 
 // 0x52
 fn inst_ld_d_d(mut cpu CPU, _ []u8) {
-	cpu.clocks += 4
+	cpu.advance_clocks(4)
 }
 
 // 0x53
 fn inst_ld_d_e(mut cpu CPU, _ []u8) {
-	cpu.clocks += 4
+	cpu.advance_clocks(4)
 	cpu.r.de.set_hi(cpu.r.de.lo())
 }
 
 // 0x54
 fn inst_ld_d_h(mut cpu CPU, _ []u8) {
-	cpu.clocks += 4
+	cpu.advance_clocks(4)
 	cpu.r.de.set_hi(cpu.r.hl.hi())
 }
 
 // 0x55
 fn inst_ld_d_l(mut cpu CPU, _ []u8) {
-	cpu.clocks += 4
+	cpu.advance_clocks(4)
 	cpu.r.de.set_hi(cpu.r.hl.lo())
 }
 
@@ -392,42 +564,42 @@ fn inst_ld_d_hl(mut cpu CPU, data []u8) {
 
 // 0x57
 fn inst_ld_d_a(mut cpu CPU, _ []u8) {
-	cpu.clocks += 4
+	cpu.advance_clocks(4)
 	cpu.r.de.set_hi(cpu.r.af.hi())
 }
 
 // 0x58
 fn inst_ld_e_b(mut cpu CPU, _ []u8) {
-	cpu.clocks += 4
+	cpu.advance_clocks(4)
 	cpu.r.de.set_lo(cpu.r.bc.hi())
 }
 
 // 0x59
 fn inst_ld_e_c(mut cpu CPU, _ []u8) {
-	cpu.clocks += 4
+	cpu.advance_clocks(4)
 	cpu.r.de.set_lo(cpu.r.bc.lo())
 }
 
 // 0x5A
 fn inst_ld_e_d(mut cpu CPU, _ []u8) {
-	cpu.clocks += 4
+	cpu.advance_clocks(4)
 	cpu.r.de.set_lo(cpu.r.de.hi())
 }
 
 // 0x5B
 fn inst_ld_e_e(mut cpu CPU, _ []u8) {
-	cpu.clocks += 4
+	cpu.advance_clocks(4)
 }
 
 // 0x5C
 fn inst_ld_e_h(mut cpu CPU, _ []u8) {
-	cpu.clocks += 4
+	cpu.advance_clocks(4)
 	cpu.r.de.set_lo(cpu.r.hl.hi())
 }
 
 // 0x5D
 fn inst_ld_e_l(mut cpu CPU, _ []u8) {
-	cpu.clocks += 4
+	cpu.advance_clocks(4)
 	cpu.r.de.set_lo(cpu.r.hl.lo())
 }
 
@@ -438,42 +610,42 @@ fn inst_ld_e_hl(mut cpu CPU, data []u8) {
 
 // 0x5F
 fn inst_ld_e_a(mut cpu CPU, _ []u8) {
-	cpu.clocks += 4
+	cpu.advance_clocks(4)
 	cpu.r.de.set_lo(cpu.r.af.hi())
 }
 
 // 0x60
 fn inst_ld_h_b(mut cpu CPU, _ []u8) {
-	cpu.clocks += 4
+	cpu.advance_clocks(4)
 	cpu.r.hl.set_hi(cpu.r.bc.hi())
 }
 
 // 0x61
 fn inst_ld_h_c(mut cpu CPU, _ []u8) {
-	cpu.clocks += 4
+	cpu.advance_clocks(4)
 	cpu.r.hl.set_hi(cpu.r.bc.lo())
 }
 
 // 0x62
 fn inst_ld_h_d(mut cpu CPU, _ []u8) {
-	cpu.clocks += 4
+	cpu.advance_clocks(4)
 	cpu.r.hl.set_hi(cpu.r.de.hi())
 }
 
 // 0x63
 fn inst_ld_h_e(mut cpu CPU, _ []u8) {
-	cpu.clocks += 4
+	cpu.advance_clocks(4)
 	cpu.r.hl.set_hi(cpu.r.de.lo())
 }
 
 // 0x64
 fn inst_ld_h_h(mut cpu CPU, _ []u8) {
-	cpu.clocks += 4
+	cpu.advance_clocks(4)
 }
 
 // 0x65
 fn inst_ld_h_l(mut cpu CPU, _ []u8) {
-	cpu.clocks += 4
+	cpu.advance_clocks(4)
 	cpu.r.hl.set_hi(cpu.r.hl.lo())
 }
 
@@ -484,43 +656,43 @@ fn inst_ld_h_hl(mut cpu CPU, data []u8) {
 
 // 0x67
 fn inst_ld_h_a(mut cpu CPU, _ []u8) {
-	cpu.clocks += 4
+	cpu.advance_clocks(4)
 	cpu.r.hl.set_hi(cpu.r.af.hi())
 }
 
 // 0x68
 fn inst_ld_l_b(mut cpu CPU, _ []u8) {
-	cpu.clocks += 4
+	cpu.advance_clocks(4)
 	cpu.r.hl.set_lo(cpu.r.bc.hi())
 }
 
 // 0x69
 fn inst_ld_l_c(mut cpu CPU, _ []u8) {
-	cpu.clocks += 4
+	cpu.advance_clocks(4)
 	cpu.r.hl.set_lo(cpu.r.bc.lo())
 }
 
 // 0x6A
 fn inst_ld_l_d(mut cpu CPU, _ []u8) {
-	cpu.clocks += 4
+	cpu.advance_clocks(4)
 	cpu.r.hl.set_lo(cpu.r.de.hi())
 }
 
 // 0x6B
 fn inst_ld_l_e(mut cpu CPU, _ []u8) {
-	cpu.clocks += 4
+	cpu.advance_clocks(4)
 	cpu.r.hl.set_lo(cpu.r.de.lo())
 }
 
 // 0x6C
 fn inst_ld_l_h(mut cpu CPU, _ []u8) {
-	cpu.clocks += 4
+	cpu.advance_clocks(4)
 	cpu.r.hl.set_lo(cpu.r.hl.hi())
 }
 
 // 0x6D
 fn inst_ld_l_l(mut cpu CPU, _ []u8) {
-	cpu.clocks += 4
+	cpu.advance_clocks(4)
 }
 
 // 0x6E
@@ -530,7 +702,7 @@ fn inst_ld_l_hl(mut cpu CPU, data []u8) {
 
 // 0x6F
 fn inst_ld_l_a(mut cpu CPU, _ []u8) {
-	cpu.clocks += 4
+	cpu.advance_clocks(4)
 	cpu.r.hl.set_lo(cpu.r.af.hi())
 }
 
@@ -564,6 +736,19 @@ fn inst_ld_hl_l(mut cpu CPU, data []u8) {
 	cpu.routine_ld_ptr8(data, cpu.r.hl, cpu.r.hl.lo())
 }
 
+// 0x76
+fn inst_halt(mut cpu CPU, data []u8) {
+	cpu.advance_clocks(4)
+	interrupt_enable := cpu.mbus.read(data, addr_io_ie)
+	interrupt_flag := cpu.mbus.read(data, addr_io_if)
+	interrupt_pending := (interrupt_enable & interrupt_flag) & 0x1f != 0
+	if !cpu.interrupt_data.master_enable && interrupt_pending {
+		cpu.halt_bug = true
+	} else {
+		cpu.timer.halt_type = .halt
+	}
+}
+
 // 0x77
 fn inst_ld_hl_a(mut cpu CPU, data []u8) {
 	cpu.routine_ld_ptr8(data, cpu.r.hl, cpu.r.af.hi())
@@ -571,37 +756,37 @@ fn inst_ld_hl_a(mut cpu CPU, data []u8) {
 
 // 0x78
 fn inst_ld_a_b(mut cpu CPU, _ []u8) {
-	cpu.clocks += 4
+	cpu.advance_clocks(4)
 	cpu.r.af.set_hi(cpu.r.bc.hi())
 }
 
 // 0x79
 fn inst_ld_a_c(mut cpu CPU, _ []u8) {
-	cpu.clocks += 4
+	cpu.advance_clocks(4)
 	cpu.r.af.set_hi(cpu.r.bc.lo())
 }
 
 // 0x7A
 fn inst_ld_a_d(mut cpu CPU, _ []u8) {
-	cpu.clocks += 4
+	cpu.advance_clocks(4)
 	cpu.r.af.set_hi(cpu.r.de.hi())
 }
 
 // 0x7B
 fn inst_ld_a_e(mut cpu CPU, _ []u8) {
-	cpu.clocks += 4
+	cpu.advance_clocks(4)
 	cpu.r.af.set_hi(cpu.r.de.lo())
 }
 
 // 0x7C
 fn inst_ld_a_h(mut cpu CPU, _ []u8) {
-	cpu.clocks += 4
+	cpu.advance_clocks(4)
 	cpu.r.af.set_hi(cpu.r.hl.hi())
 }
 
 // 0x7D
 fn inst_ld_a_l(mut cpu CPU, _ []u8) {
-	cpu.clocks += 4
+	cpu.advance_clocks(4)
 	cpu.r.af.set_hi(cpu.r.hl.lo())
 }
 
@@ -612,7 +797,7 @@ fn inst_ld_a_hl(mut cpu CPU, data []u8) {
 
 // 0x7F
 fn inst_ld_a_a(mut cpu CPU, _ []u8) {
-	cpu.clocks += 4
+	cpu.advance_clocks(4)
 }
 
 // 0x80
@@ -645,9 +830,27 @@ fn inst_add_a_l(mut cpu CPU, _ []u8) {
 	cpu.routine_add_a8(cpu.r.hl.lo())
 }
 
+// 0x86
+fn inst_adi_a_hl(mut cpu CPU, data []u8) {
+	cpu.advance_clocks(4)
+	cpu.set_flag_subtract(false)
+	a := cpu.r.af.hi()
+	hl := cpu.mbus.read(data, cpu.r.hl)
+	cpu.set_flag_half_carry((a & 0xf + hl & 0xf) > 0xf)
+	cpu.advance_clocks(4)
+	cpu.r.af.set_hi(cpu.r.af.hi() + hl)
+	cpu.set_flag_zero(cpu.r.af.hi() == 0)
+	cpu.set_flag_carry(a > cpu.r.af.hi())
+}
+
 // 0x87
 fn inst_add_a_a(mut cpu CPU, _ []u8) {
-	cpu.routine_add_a8(cpu.r.af.hi())
+	cpu.advance_clocks(4)
+	cpu.set_flag_subtract(false)
+	cpu.set_flag_half_carry(cpu.r.af.hi() & 1 << 3 != 0)
+	cpu.set_flag_carry(cpu.r.af.hi() & 1 << 7 != 0)
+	cpu.r.af.set_hi(cpu.r.af.hi() + cpu.r.af.hi())
+	cpu.set_flag_zero(cpu.r.af.hi() == 0)
 }
 
 // 0x88
@@ -680,9 +883,26 @@ fn inst_adc_a_l(mut cpu CPU, _ []u8) {
 	cpu.routine_adc_a8(cpu.r.hl.lo())
 }
 
+// 0x8E
+fn inst_adc_a_hl(mut cpu CPU, data []u8) {
+	cpu.advance_clocks(4)
+	cpu.set_flag_subtract(false)
+	hl := cpu.mbus.read(data, cpu.r.hl)
+	a := cpu.r.af.hi() + hl + u8(cpu.get_flag_carry())
+	cpu.set_flag_half_carry(cpu.r.af.hi() & 0xf + hl & 0xf + u8(cpu.get_flag_carry()) > 0xf)
+	cpu.set_flag_carry(a > 0xff)
+	cpu.r.af.set_hi(a & 0xff)
+	cpu.set_flag_zero(cpu.r.af.hi() == 0)
+}
+
 // 0x8F
 fn inst_adc_a_a(mut cpu CPU, _ []u8) {
-	cpu.routine_adc_a8(cpu.r.af.hi())
+	cpu.advance_clocks(4)
+	cpu.set_flag_subtract(false)
+	tmp := u16(cpu.r.af.hi()) << 1 + u16(cpu.get_flag_carry())
+	cpu.set_flag_half_carry(cpu.r.af.hi() & 0x08 != 0)
+	cpu.set_flag_carry(tmp > 0xff)
+	cpu.set_flag_zero(tmp & 0xff == 0)
 }
 
 // 0x90
@@ -715,9 +935,26 @@ fn inst_sub_a_l(mut cpu CPU, _ []u8) {
 	cpu.routine_sub_a8(cpu.r.hl.lo())
 }
 
+// 0x96
+fn inst_sub_a_hl(mut cpu CPU, data []u8) {
+	cpu.advance_clocks(4)
+	tmp := cpu.mbus.read(data, cpu.r.hl)
+	cpu.advance_clocks(4)
+	cpu.set_flag_subtract(true)
+	cpu.set_flag_half_carry((cpu.r.af.hi() & 0xf) < (tmp & 0xf))
+	cpu.set_flag_carry(cpu.r.af.hi() < tmp)
+	cpu.r.af.set_hi(cpu.r.af.hi() - tmp)
+	cpu.set_flag_zero(cpu.r.af.hi() == 0)
+}
+
 // 0x97
 fn inst_sub_a_a(mut cpu CPU, _ []u8) {
-	cpu.routine_sub_a8(cpu.r.af.hi())
+	cpu.advance_clocks(4)
+	cpu.set_flag_zero(true)
+	cpu.set_flag_subtract(true)
+	cpu.set_flag_half_carry(false)
+	cpu.set_flag_carry(false)
+	cpu.r.af.set_hi(0)
 }
 
 // 0x98
@@ -750,9 +987,28 @@ fn inst_sbc_a_l(mut cpu CPU, _ []u8) {
 	cpu.routine_sbc_a8(cpu.r.hl.lo())
 }
 
+// 0x9E
+fn inst_sbc_a_hl(mut cpu CPU, data []u8) {
+	cpu.advance_clocks(4)
+	hl := cpu.mbus.read(data, cpu.r.hl)
+	cpu.advance_clocks(4)
+	a := cpu.r.af.hi() - (hl + u8(cpu.get_flag_carry()))
+	cpu.set_flag_carry(a & ~0xff != 0)
+	cpu.set_flag_zero(a & 0xff == 0)
+	cpu.set_flag_subtract(true)
+	cpu.set_flag_half_carry((cpu.r.af.hi() ^ hl ^ a) & 0x10 != 0)
+	cpu.r.af.set_hi(a)
+}
+
 // 0x9F
 fn inst_sbc_a_a(mut cpu CPU, _ []u8) {
-	cpu.routine_sbc_a8(cpu.r.af.hi())
+	cpu.advance_clocks(4)
+	fc := cpu.get_flag_carry()
+	cpu.r.af.set_hi(if fc { u8(0xff) } else { u8(0x00) })
+	cpu.set_flag_carry(fc)
+	cpu.set_flag_half_carry(fc)
+	cpu.set_flag_zero(!fc)
+	cpu.set_flag_subtract(true)
 }
 
 // 0xA0
@@ -785,9 +1041,24 @@ fn inst_and_a_l(mut cpu CPU, _ []u8) {
 	cpu.routine_and_a8(cpu.r.hl.lo())
 }
 
+// 0xA6
+fn inst_and_a_hl(mut cpu CPU, data []u8) {
+	cpu.advance_clocks(4)
+	cpu.set_flag_half_carry(true)
+	cpu.set_flag_subtract(false)
+	cpu.set_flag_carry(false)
+	cpu.advance_clocks(4)
+	cpu.r.af.set_hi(cpu.r.af.hi() & cpu.mbus.read(data, cpu.r.hl))
+	cpu.set_flag_zero(cpu.r.af.hi() == 0)
+}
+
 // 0xA7
 fn inst_and_a_a(mut cpu CPU, _ []u8) {
-	cpu.routine_and_a8(cpu.r.af.hi())
+	cpu.advance_clocks(4)
+	cpu.set_flag_half_carry(true)
+	cpu.set_flag_subtract(false)
+	cpu.set_flag_carry(false)
+	cpu.set_flag_zero(cpu.r.af.hi() == 0)
 }
 
 // 0xA8
@@ -820,6 +1091,17 @@ fn inst_xor_a_l(mut cpu CPU, _ []u8) {
 	cpu.routine_xor_a8(cpu.r.hl.lo())
 }
 
+// 0xAE
+fn inst_xor_a_hl(mut cpu CPU, data []u8) {
+	cpu.advance_clocks(4)
+	cpu.set_flag_subtract(false)
+	cpu.set_flag_carry(false)
+	cpu.set_flag_half_carry(false)
+	cpu.advance_clocks(4)
+	cpu.r.af.set_hi(cpu.r.af.hi() ^ cpu.mbus.read(data, cpu.r.hl))
+	cpu.set_flag_zero(cpu.r.af.hi() == 0)
+}
+
 // 0xAF
 fn inst_xor_a_a(mut cpu CPU, _ []u8) {
 	cpu.r.af = 0
@@ -827,7 +1109,7 @@ fn inst_xor_a_a(mut cpu CPU, _ []u8) {
 	cpu.set_flag_carry(false)
 	cpu.set_flag_half_carry(false)
 	cpu.set_flag_zero(true)
-	cpu.clocks += 4
+	cpu.advance_clocks(4)
 }
 
 // 0xB0
@@ -860,9 +1142,24 @@ fn inst_or_a_l(mut cpu CPU, _ []u8) {
 	cpu.routine_or_a8(cpu.r.hl.lo())
 }
 
+// 0xB6
+fn inst_or_a_hl(mut cpu CPU, data []u8) {
+	cpu.advance_clocks(4)
+	cpu.set_flag_carry(false)
+	cpu.set_flag_subtract(false)
+	cpu.set_flag_half_carry(false)
+	cpu.advance_clocks(4)
+	cpu.r.af.set_hi(cpu.r.af.hi() | cpu.mbus.read(data, cpu.r.hl))
+	cpu.set_flag_zero(cpu.r.af.hi() == 0)
+}
+
 // 0xB7
 fn inst_or_a_a(mut cpu CPU, _ []u8) {
-	cpu.routine_or_a8(cpu.r.af.hi())
+	cpu.advance_clocks(4)
+	cpu.set_flag_carry(false)
+	cpu.set_flag_subtract(false)
+	cpu.set_flag_half_carry(false)
+	cpu.set_flag_zero(cpu.r.af.hi() == 0)
 }
 
 // 0xB8
@@ -895,9 +1192,24 @@ fn inst_cp_a_l(mut cpu CPU, _ []u8) {
 	cpu.routine_cp_a8(cpu.r.hl.lo())
 }
 
+// 0xBE
+fn inst_cp_a_hl(mut cpu CPU, data []u8) {
+	cpu.advance_clocks(4)
+	cpu.set_flag_subtract(true)
+	tmp := cpu.mbus.read(data, cpu.r.hl)
+	cpu.advance_clocks(4)
+	cpu.set_flag_half_carry(cpu.r.af.hi() & 0xf < tmp & 0xf)
+	cpu.set_flag_carry(cpu.r.af.hi() < tmp)
+	cpu.set_flag_zero(cpu.r.af.hi() == 0)
+}
+
 // 0xBF
 fn inst_cp_a_a(mut cpu CPU, _ []u8) {
-	cpu.routine_cp_a8(cpu.r.af.hi())
+	cpu.advance_clocks(4)
+	cpu.set_flag_subtract(true)
+	cpu.set_flag_zero(true)
+	cpu.set_flag_half_carry(false)
+	cpu.set_flag_carry(false)
 }
 
 // 0xC0
@@ -917,17 +1229,17 @@ fn inst_jp_nz_a16(mut cpu CPU, data []u8) {
 
 // 0xC3
 fn inst_jp_a16(mut cpu CPU, data []u8) {
-	cpu.clocks += 4
-	mut tmp := u32(memory_bus_read(data, cpu.r.pc))
+	cpu.advance_clocks(4)
+	mut tmp := u16(cpu.mbus.read(data, cpu.r.pc))
 	cpu.r.pc++
 	cpu.r.pc &= 0xFFFF
-	cpu.clocks += 4
-	tmp |= u32(memory_bus_read(data, cpu.r.pc)) << 8
+	cpu.advance_clocks(4)
+	tmp |= u16(cpu.mbus.read(data, cpu.r.pc)) << 8
 	cpu.r.pc++
 	cpu.r.pc &= 0xFFFF
-	cpu.clocks += 4
+	cpu.advance_clocks(4)
 	cpu.r.pc = u16(tmp)
-	cpu.clocks += 4
+	cpu.advance_clocks(4)
 }
 
 // 0xC4
@@ -940,6 +1252,20 @@ fn inst_push_bc(mut cpu CPU, data []u8) {
 	cpu.routine_push_n16(data, cpu.r.bc)
 }
 
+// 0xC6
+fn inst_add_a_n8(mut cpu CPU, data []u8) {
+	cpu.advance_clocks(4)
+	a := cpu.r.af.hi()
+	op := cpu.mbus.read(data, cpu.r.pc)
+	cpu.r.pc++
+	cpu.advance_clocks(4)
+	cpu.set_flag_subtract(false)
+	cpu.set_flag_half_carry((a & 0xf + op & 0xf) > 0xf)
+	cpu.r.af.set_hi(cpu.r.af.hi() + op)
+	cpu.set_flag_zero(cpu.r.af.hi() == 0)
+	cpu.set_flag_carry(a > cpu.r.af.hi())
+}
+
 // 0xC7
 fn inst_rst_00(mut cpu CPU, data []u8) {
 	cpu.routine_rst_n16(data, 0x0000)
@@ -950,6 +1276,19 @@ fn inst_ret_z(mut cpu CPU, data []u8) {
 	cpu.routine_ret_cond(data, cpu.get_flag_zero())
 }
 
+// 0xC9
+fn inst_ret(mut cpu CPU, data []u8) {
+	cpu.advance_clocks(4)
+	mut tmp := u16(cpu.mbus.read(data, cpu.r.sp))
+	cpu.r.sp++
+	cpu.advance_clocks(4)
+	tmp |= u16(cpu.mbus.read(data, cpu.r.sp)) << 8
+	cpu.r.sp++
+	cpu.advance_clocks(4)
+	cpu.r.pc = tmp
+	cpu.advance_clocks(4)
+}
+
 // 0xCA
 fn inst_jp_z_a16(mut cpu CPU, data []u8) {
 	cpu.routine_jp_cond_a16(data, cpu.get_flag_zero())
@@ -958,6 +1297,38 @@ fn inst_jp_z_a16(mut cpu CPU, data []u8) {
 // 0xCC
 fn inst_call_z_a16(mut cpu CPU, data []u8) {
 	cpu.routine_call_cond_a16(data, cpu.get_flag_zero())
+}
+
+// 0xCD
+fn inst_call_a16(mut cpu CPU, data []u8) {
+	cpu.advance_clocks(4)
+	mut tmp := u16(cpu.mbus.read(data, cpu.r.pc))
+	cpu.r.pc++
+	cpu.advance_clocks(4)
+	tmp |= u16(cpu.mbus.read(data, cpu.r.pc)) << 8
+	cpu.r.pc++
+	cpu.advance_clocks(4)
+	cpu.mbus.write(data, cpu.r.sp, cpu.r.pc.hi())
+	cpu.advance_clocks(4)
+	cpu.r.sp--
+	cpu.advance_clocks(4)
+	cpu.mbus.write(data, cpu.r.sp, cpu.r.pc.lo())
+	cpu.advance_clocks(4)
+	cpu.r.pc = tmp
+}
+
+// 0xCE
+fn inst_adc_a_n8(mut cpu CPU, data []u8) {
+	cpu.advance_clocks(4)
+	cpu.set_flag_subtract(false)
+	op := cpu.mbus.read(data, cpu.r.pc)
+	cpu.r.pc++
+	a := cpu.r.af.hi() + op + u8(cpu.get_flag_carry())
+	cpu.set_flag_half_carry((cpu.r.af.hi() & 0xf + op & 0xf + u8(cpu.get_flag_carry())) > 0xf)
+	cpu.set_flag_carry(a > 0xff)
+	cpu.advance_clocks(4)
+	cpu.r.af.set_hi(a & 0xff)
+	cpu.set_flag_zero(cpu.r.af.hi() == 0)
 }
 
 // 0xCF
@@ -990,6 +1361,19 @@ fn inst_push_de(mut cpu CPU, data []u8) {
 	cpu.routine_push_n16(data, cpu.r.de)
 }
 
+// 0xD6
+fn inst_sub_a_n8(mut cpu CPU, data []u8) {
+	cpu.advance_clocks(4)
+	tmp := cpu.mbus.read(data, cpu.r.pc)
+	cpu.r.pc++
+	cpu.set_flag_subtract(true)
+	cpu.set_flag_half_carry(cpu.r.af.hi() & 0xf < tmp & 0xf)
+	cpu.set_flag_carry(cpu.r.af.hi() < tmp)
+	cpu.advance_clocks(4)
+	cpu.r.af.set_hi(cpu.r.af.hi() - tmp)
+	cpu.set_flag_zero(cpu.r.af.hi() == 0)
+}
+
 // 0xD7
 fn inst_rst_10(mut cpu CPU, data []u8) {
 	cpu.routine_rst_n16(data, 0x0010)
@@ -998,6 +1382,22 @@ fn inst_rst_10(mut cpu CPU, data []u8) {
 // 0xD8
 fn inst_ret_c(mut cpu CPU, data []u8) {
 	cpu.routine_ret_cond(data, cpu.get_flag_carry())
+}
+
+// 0xD9
+fn inst_reti(mut cpu CPU, data []u8) {
+	cpu.advance_clocks(4)
+	mut tmp := u16(cpu.mbus.read(data, cpu.r.sp))
+	cpu.r.sp++
+	cpu.r.sp &= 0xffff
+	cpu.advance_clocks(4)
+	tmp |= u16(cpu.mbus.read(data, cpu.r.sp)) << 8
+	cpu.r.sp++
+	cpu.r.sp &= 0xffff
+	cpu.advance_clocks(4)
+	cpu.r.pc = tmp
+	cpu.advance_clocks(4)
+	cpu.interrupt_data.master_enable = true
 }
 
 // 0xDA
@@ -1010,9 +1410,32 @@ fn inst_call_c_a16(mut cpu CPU, data []u8) {
 	cpu.routine_call_cond_a16(data, cpu.get_flag_carry())
 }
 
+// 0xDE
+fn inst_sbc_a_n8(mut cpu CPU, data []u8) {
+	cpu.advance_clocks(4)
+	op := cpu.mbus.read(data, cpu.r.pc)
+	cpu.r.pc++
+	a := cpu.r.af.hi() - (op + u8(cpu.get_flag_carry()))
+	cpu.set_flag_carry(a & ~0xff == 0)
+	cpu.set_flag_subtract(false)
+	cpu.set_flag_half_carry((cpu.r.af.hi() ^ op ^ a) & 0x10 != 0)
+	cpu.advance_clocks(4)
+	cpu.r.af.set_hi(a)
+}
+
 // 0xDF
 fn inst_rst_18(mut cpu CPU, data []u8) {
 	cpu.routine_rst_n16(data, 0x0018)
+}
+
+// 0xE0
+fn inst_ldh_a8_a(mut cpu CPU, data []u8) {
+	cpu.advance_clocks(4)
+	tmp := 0xff00 + u16(cpu.mbus.read(data, cpu.r.pc))
+	cpu.r.pc++
+	cpu.advance_clocks(4)
+	cpu.mbus.write(data, tmp, cpu.r.af.hi())
+	cpu.advance_clocks(4)
 }
 
 // 0xE1
@@ -1020,9 +1443,28 @@ fn inst_pop_hl(mut cpu CPU, data []u8) {
 	cpu.routine_pop_n16(data, cpu.r.hl)
 }
 
+// 0xE2
+fn inst_ldh_c_a(mut cpu CPU, data []u8) {
+	cpu.advance_clocks(4)
+	cpu.mbus.write(data, u16(0xff00 + cpu.r.bc.lo()), cpu.r.af.hi())
+	cpu.advance_clocks(4)
+}
+
 // 0xE5
 fn inst_push_hl(mut cpu CPU, data []u8) {
 	cpu.routine_push_n16(data, cpu.r.hl)
+}
+
+// 0xE6
+fn inst_and_a_n8(mut cpu CPU, data []u8) {
+	cpu.advance_clocks(4)
+	cpu.set_flag_subtract(false)
+	cpu.set_flag_carry(false)
+	cpu.set_flag_half_carry(true)
+	cpu.advance_clocks(4)
+	cpu.r.af.set_hi(cpu.r.af.hi() & cpu.mbus.read(data, cpu.r.pc))
+	cpu.r.pc++
+	cpu.set_flag_zero(cpu.r.af.hi() == 0)
 }
 
 // 0xE7
@@ -1030,9 +1472,67 @@ fn inst_rst_20(mut cpu CPU, data []u8) {
 	cpu.routine_rst_n16(data, 0x0020)
 }
 
+// 0xE8
+fn inst_add_sp_e8(mut cpu CPU, data []u8) {
+	cpu.advance_clocks(4)
+	tmp := cpu.mbus.read(data, cpu.r.pc)
+	cpu.r.pc++
+	cpu.advance_clocks(4)
+	cpu.set_flag_zero(false)
+	cpu.set_flag_subtract(false)
+	cc := (cpu.r.sp & 0x00ff + tmp & 0x0ff) > 0x00ff
+	cpu.set_flag_carry(cc)
+	cpu.set_flag_half_carry(cc)
+	cpu.advance_clocks(4)
+	cpu.r.sp += tmp
+	cpu.advance_clocks(4)
+}
+
+// 0xE9
+fn inst_jp_hl(mut cpu CPU, _ []u8) {
+	cpu.advance_clocks(4)
+	cpu.r.pc = cpu.r.hl
+}
+
+// 0xEA
+fn inst_ld_a16_a(mut cpu CPU, data []u8) {
+	cpu.advance_clocks(4)
+	mut tmp := u16(cpu.mbus.read(data, cpu.r.pc))
+	cpu.r.pc++
+	cpu.r.pc &= 0xffff
+	cpu.advance_clocks(4)
+	tmp |= u16(cpu.mbus.read(data, cpu.r.pc)) << 8
+	cpu.r.pc++
+	cpu.r.pc &= 0xffff
+	cpu.advance_clocks(4)
+	cpu.mbus.write(data, tmp, cpu.r.af.hi())
+}
+
+// 0xEE
+fn inst_xor_a_n8(mut cpu CPU, data []u8) {
+	cpu.advance_clocks(4)
+	cpu.set_flag_subtract(false)
+	cpu.set_flag_carry(false)
+	cpu.set_flag_half_carry(false)
+	cpu.advance_clocks(4)
+	cpu.r.af.set_hi(cpu.r.af.hi() ^ cpu.mbus.read(data, cpu.r.pc))
+	cpu.r.pc++
+	cpu.set_flag_zero(cpu.r.af.hi() == 0)
+}
+
 // 0xEF
 fn inst_rst_28(mut cpu CPU, data []u8) {
 	cpu.routine_rst_n16(data, 0x0028)
+}
+
+// 0xF0
+fn inst_ldh_a_a8(mut cpu CPU, data []u8) {
+	cpu.advance_clocks(4)
+	tmp := 0xff00 + u16(cpu.mbus.read(data, cpu.r.pc))
+	cpu.r.pc++
+	cpu.advance_clocks(4)
+	cpu.r.af.set_hi(cpu.mbus.read(data, tmp))
+	cpu.advance_clocks(4)
 }
 
 // 0xF1
@@ -1040,14 +1540,97 @@ fn inst_pop_af(mut cpu CPU, data []u8) {
 	cpu.routine_pop_n16(data, cpu.r.af)
 }
 
+// 0xF2
+fn inst_ldh_a_c(mut cpu CPU, data []u8) {
+	cpu.advance_clocks(4)
+	cpu.r.af.set_hi(cpu.mbus.read(data, u16(0xff00 + cpu.r.bc.lo())))
+	cpu.advance_clocks(4)
+}
+
+// 0xF3
+fn inst_di(mut cpu CPU, _ []u8) {
+	cpu.advance_clocks(4)
+	cpu.interrupt_data.master_enable = false
+	cpu.interrupt_data.enable_ime_delay = 0
+}
+
 // 0xF5
 fn inst_push_af(mut cpu CPU, data []u8) {
 	cpu.routine_push_n16(data, cpu.r.af)
 }
 
+// 0xF6
+fn inst_or_a_n8(mut cpu CPU, data []u8) {
+	cpu.advance_clocks(4)
+	cpu.set_flag_subtract(false)
+	cpu.set_flag_carry(false)
+	cpu.set_flag_half_carry(false)
+	cpu.advance_clocks(4)
+	cpu.r.af.set_hi(cpu.r.af.hi() | cpu.mbus.read(data, cpu.r.pc))
+	cpu.r.pc++
+	cpu.set_flag_zero(cpu.r.af.hi() == 0)
+}
+
 // 0xF7
 fn inst_rst_30(mut cpu CPU, data []u8) {
 	cpu.routine_rst_n16(data, 0x0030)
+}
+
+// 0xF8
+fn inst_ld_hl_sp_e8(mut cpu CPU, data []u8) {
+	cpu.advance_clocks(4)
+	tmp := cpu.mbus.read(data, cpu.r.pc)
+	cpu.r.pc++
+	cpu.r.pc &= 0xffff
+	cpu.advance_clocks(4)
+	res := cpu.r.sp + tmp
+	cpu.advance_clocks(4)
+	cpu.r.hl = res & 0xffff
+	cpu.set_flag_zero(false)
+	cpu.set_flag_subtract(false)
+	cpu.set_flag_half_carry((cpu.r.sp & 0x000f + tmp & 0x0000f) > 0x000f)
+	cpu.set_flag_carry((cpu.r.sp & 0x00ff + tmp & 0x00ff) > 0x00ff)
+}
+
+// 0xF9
+fn inst_ld_sp_hl(mut cpu CPU, _ []u8) {
+	cpu.advance_clocks(4)
+	cpu.r.sp = cpu.r.hl
+	cpu.advance_clocks(4)
+}
+
+// 0xFA
+fn inst_ld_a_a16(mut cpu CPU, data []u8) {
+	cpu.advance_clocks(4)
+	mut tmp := u16(cpu.mbus.read(data, cpu.r.pc))
+	cpu.r.pc++
+	cpu.r.pc &= 0xffff
+	cpu.advance_clocks(4)
+	tmp |= u16(cpu.mbus.read(data, cpu.r.pc)) << 8
+	cpu.r.pc++
+	cpu.r.pc &= 0xffff
+	cpu.advance_clocks(4)
+	cpu.r.af.set_hi(cpu.mbus.read(data, tmp))
+	cpu.advance_clocks(4)
+}
+
+// 0xFB
+fn inst_ei(mut cpu CPU, data []u8) {
+	cpu.advance_clocks(4)
+	cpu.interrupt_data.enable_ime_delay = 1
+}
+
+// 0xFE
+fn inst_cp_a_n8(mut cpu CPU, data []u8) {
+	cpu.advance_clocks(4)
+	cpu.set_flag_subtract(true)
+	op := cpu.mbus.read(data, cpu.r.pc)
+	cpu.r.pc++
+	a := cpu.r.af.hi()
+	cpu.set_flag_half_carry(a & 0xf < op & 0xf)
+	cpu.set_flag_carry(a < op)
+	cpu.set_flag_zero(a == op)
+	cpu.advance_clocks(4)
 }
 
 // 0xFF

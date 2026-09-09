@@ -12,15 +12,20 @@ mut:
 fn frame(mut app App) {
 	app.gg.begin()
 
-	app.cpu.fetch(app.data)
-	app.cpu.execute(app.data)
+	app.cpu.tick(app.data)
 
 	app.gg.end()
 }
 
 fn main() {
+	mbus := MemoryBus.new()
 	mut app := &App{
-		cpu: CPU{}
+		cpu: CPU{
+			mbus: mbus
+			timer: Timer{
+				r: unsafe { &TimerRegisters(mbus.memory + 0xff04) }
+			}
+		}
 		data: cart_load('./tetris.gb')!
 	}
 
@@ -34,5 +39,7 @@ fn main() {
 	)
 
 	app.cpu.reset()
+	app.cpu.timer.reset()
+
 	app.gg.run()
 }
