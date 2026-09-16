@@ -33,18 +33,31 @@ fn (mut cpu CPU) reset() {
 }
 
 fn (mut cpu CPU) fetch(program []u8) {
-	cpu.opcode = program[cpu.r.pc]
+	$if debug_instructions ? {
+		println(cpu.r)
+	}
+	
+	cpu.opcode = cpu.mbus.read(program, cpu.r.pc)
 	cpu.r.pc++
-	cpu.inst = inst(cpu.opcode)
+	is_extended_cb_inst := cpu.opcode == 0xCB
+
 	if cpu.halt_bug {
 		cpu.r.pc--
 		cpu.halt_bug = false
+	}
+
+	if is_extended_cb_inst {
+		cpu.advance_clocks(4)
+		opcode_cb := cpu.mbus.read(program, cpu.r.pc)
+		cpu.r.pc++
+		cpu.inst = inst_prefixed(opcode_cb)
+	} else {
+		cpu.inst = inst(cpu.opcode)
 	}
 }
 
 fn (mut cpu CPU) execute(program []u8) {
 	if inst := cpu.inst {
-		println(inst)
 		if f := inst.function {
 			f(mut cpu, program)
 		} else {

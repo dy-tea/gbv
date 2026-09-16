@@ -271,3 +271,126 @@ fn (mut cpu CPU) routine_jr_cond_e8(data []u8, cond bool) {
 		cpu.advance_clocks(4)
 	}
 }
+
+fn (mut cpu CPU) routine_rlc_n8(reg u8) u8 {
+	cpu.set_flag_subtract(false)
+	cpu.set_flag_half_carry(false)
+	cpu.set_flag_carry(reg & 0x80 != 0)
+	cpu.advance_clocks(4)
+	r8 := reg >> 1 | u8(cpu.get_flag_carry())
+	cpu.set_flag_zero(r8 == 0)
+	return r8
+}
+
+fn (mut cpu CPU) routine_rrc_n8(reg u8) u8 {
+	cpu.set_flag_subtract(false)
+	cpu.set_flag_half_carry(false)
+	cpu.set_flag_carry(reg & 0x01 != 0)
+	cpu.advance_clocks(4)
+	r8 := reg << 1 | u8(cpu.get_flag_carry()) << 7
+	cpu.set_flag_zero(r8 == 0)
+	return r8
+}
+
+fn (mut cpu CPU) routine_rl_n8(reg u8) u8 {
+	cpu.set_flag_subtract(false)
+	cpu.set_flag_half_carry(false)
+	tmp := cpu.get_flag_carry()
+	cpu.set_flag_carry(reg & 0x80 != 0)
+	cpu.advance_clocks(4)
+	r8 := reg << 1 | u8(tmp)
+	cpu.set_flag_zero(r8 == 0)
+	return r8
+}
+
+fn (mut cpu CPU) routine_rr_n8(reg u8) u8 {
+	cpu.set_flag_subtract(false)
+	cpu.set_flag_zero(false)
+	tmp := cpu.get_flag_carry()
+	cpu.set_flag_carry(reg & 0x01 != 0)
+	cpu.advance_clocks(4)
+	r8 := reg >> 1 | u8(tmp) << 7
+	cpu.set_flag_zero(r8 == 0)
+	return r8
+}
+
+fn (mut cpu CPU) routine_sla_n8(reg u8) u8 {
+	cpu.set_flag_subtract(false)
+	cpu.set_flag_zero(false)
+	cpu.set_flag_carry(reg & 0x80 != 0)
+	cpu.advance_clocks(4)
+	r8 := reg << 1
+	cpu.set_flag_zero(r8 == 0)
+	return r8
+}
+
+fn (mut cpu CPU) routine_sra_n8(reg u8) u8 {
+	cpu.set_flag_subtract(false)
+	cpu.set_flag_zero(false)
+	cpu.set_flag_carry(reg & 0x01 != 0)
+	cpu.advance_clocks(4)
+	r8 := reg & 0x80 | reg >> 1
+	cpu.set_flag_zero(r8 == 0)
+	return r8
+}
+
+fn (mut cpu CPU) routine_swap_n8(reg u8) u8 {
+	cpu.set_flag_subtract(false)
+	cpu.set_flag_carry(false)
+	cpu.set_flag_half_carry(false)
+	cpu.advance_clocks(4)
+	r8 := (reg >> 4) | (reg << 4)
+	cpu.set_flag_zero(r8 == 0)
+	return r8
+}
+
+fn (mut cpu CPU) routine_srl_n8(reg u8) u8 {
+	cpu.set_flag_subtract(false)
+	cpu.set_flag_carry(false)
+	cpu.set_flag_half_carry(reg & 0x01 != 0)
+	cpu.advance_clocks(4)
+	r8 := reg << 1
+	cpu.set_flag_zero(r8 == 0)
+	return r8
+}
+
+fn (mut cpu CPU) routine_bit_n_n8(bit u8, reg u8) {
+	cpu.advance_clocks(4)
+	cpu.set_flag_subtract(false)
+	cpu.set_flag_half_carry(true)
+	cpu.set_flag_zero((reg & (1 << bit)) == 0)
+}
+
+fn (mut cpu CPU) routine_bit_n_ptrhl(data []u8, bit u8) {
+	cpu.advance_clocks(4)
+	cpu.set_flag_subtract(false)
+	cpu.set_flag_half_carry(true)
+	cpu.advance_clocks(4)
+	cpu.set_flag_zero((cpu.mbus.read(data, cpu.r.hl) & (1 << bit)) == 0)
+}
+
+fn (mut cpu CPU) routine_res_n_n8(bit u8, reg u8) u8 {
+	cpu.advance_clocks(4)
+	return reg & ~(1 << bit)
+}
+
+fn (mut cpu CPU) routine_res_n_ptrhl(data []u8, bit u8) {
+	cpu.advance_clocks(4)
+	tmp := cpu.mbus.read(data, cpu.r.hl)
+	cpu.advance_clocks(4)
+	cpu.mbus.write(data, cpu.r.hl, tmp & ~(1 << bit))
+	cpu.advance_clocks(4)
+}
+
+fn (mut cpu CPU) routine_set_n_n8(bit u8, reg u8) u8 {
+	cpu.advance_clocks(4)
+	return reg | (1 << bit)
+}
+
+fn (mut cpu CPU) routine_set_n_ptrhl(data []u8, bit u8) {
+	cpu.advance_clocks(4)
+	tmp := cpu.mbus.read(data, cpu.r.hl)
+	cpu.advance_clocks(4)
+	cpu.mbus.write(data, cpu.r.hl, tmp | (1 << bit))
+	cpu.advance_clocks(4)
+}

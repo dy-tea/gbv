@@ -107,7 +107,7 @@ fn inst_stop(mut cpu CPU, data []u8) {
 	r := cpu.mbus.read(data, cpu.r.pc)
 	cpu.r.pc++
 	if r != 0 {
-		println('CPU: corrupted STOP at PC 0x${cpu.r.pc:x}, should have operand 0x00')
+		println('CPU: corrupted STOP at PC cpu.r.pc, should have operand 0x00')
 	}
 	cpu.advance_clocks(4)
 	cpu.timer.on_div_write(0)
@@ -310,7 +310,7 @@ fn inst_ld_l_n8(mut cpu CPU, data []u8) {
 }
 
 // 0x2F
-fn inst_cpl(mut cpu CPU, data []u8) {
+fn inst_cpl(mut cpu CPU, _ []u8) {
 	cpu.advance_clocks(4)
 	cpu.set_flag_subtract(true)
 	cpu.set_flag_half_carry(true)
@@ -1615,7 +1615,7 @@ fn inst_ld_a_a16(mut cpu CPU, data []u8) {
 }
 
 // 0xFB
-fn inst_ei(mut cpu CPU, data []u8) {
+fn inst_ei(mut cpu CPU, _ []u8) {
 	cpu.advance_clocks(4)
 	cpu.interrupt_data.enable_ime_delay = 1
 }

@@ -2,6 +2,10 @@ module main
 
 type Register = u16
 
+fn (r Register) str() string {
+	return '0x${u16(r):04X}'
+}
+
 fn (r Register) hi() u8 {
 	return u8(r >> 8)
 }
