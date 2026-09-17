@@ -1032,8 +1032,6 @@ fn inst_res_7_a(mut cpu CPU, _ []u8) {
 	cpu.r.af.set_hi(cpu.routine_res_n_n8(7, cpu.r.af.hi()))
 }
 
-
-
 // 0xC0
 fn inst_set_0_b(mut cpu CPU, _ []u8) {
 	cpu.r.bc.set_hi(cpu.routine_set_n_n8(0, cpu.r.bc.hi()))

@@ -1,17 +1,5 @@
 module main
 
-fn (mut cpu CPU) interrupt_enable_write(value u8) {
-	unsafe { cpu.mbus.memory[addr_io_ie] = value }
-}
-
-fn (mut cpu CPU) interrupt_flag_write(value u8) {
-	unsafe { cpu.mbus.memory[addr_io_if] = value }
-}
-
-fn (mut cpu CPU) interrupt_raise_flag(flag u8) {
-	unsafe { cpu.mbus.memory[addr_io_if] |= flag }
-}
-
 fn (mut cpu CPU) interrupt_jump_to(data []u8, addr u16) {
 	cpu.advance_clocks(4)
 	pchi := cpu.r.pc.hi()
@@ -34,9 +22,9 @@ fn (mut cpu CPU) interrupt_service_routine(data []u8) {
 	interrupt_pending := (interrupt_enable & interrupt_flag) & 0x1F != 0
 
 	if interrupt_pending {
-		if cpu.timer.halt_type == .halt {
+		if cpu.halt_type == .halt {
 			cpu.advance_clocks(4)
-			cpu.timer.halt_type = .none
+			cpu.halt_type = .none
 		}
 
 		if !cpu.interrupt_data.master_enable {
@@ -56,19 +44,19 @@ fn (mut cpu CPU) interrupt_service_routine(data []u8) {
 		flag_joypad := check_bit(interrupt_flag, 4)
 
 		if enable_vblank && flag_vblank {
-			cpu.interrupt_flag_write(clear_bit(unsafe { cpu.mbus.memory[addr_io_if] }, 0))
+			cpu.mbus.interrupt_flag_write(clear_bit(unsafe { cpu.mbus.memory[addr_io_if] }, 0))
 			cpu.interrupt_jump_to(data, interrupt_handler_vblank)
 		} else if enable_lcd_stat && flag_lcd_stat {
-			cpu.interrupt_flag_write(clear_bit(unsafe { cpu.mbus.memory[addr_io_if] }, 1))
+			cpu.mbus.interrupt_flag_write(clear_bit(unsafe { cpu.mbus.memory[addr_io_if] }, 1))
 			cpu.interrupt_jump_to(data, interrupt_handler_lcd_stat)
 		} else if enable_timer && flag_timer {
-			cpu.interrupt_flag_write(clear_bit(unsafe { cpu.mbus.memory[addr_io_if] }, 2))
+			cpu.mbus.interrupt_flag_write(clear_bit(unsafe { cpu.mbus.memory[addr_io_if] }, 2))
 			cpu.interrupt_jump_to(data, interrupt_handler_timer)
 		} else if enable_serial && flag_serial {
-			cpu.interrupt_flag_write(clear_bit(unsafe { cpu.mbus.memory[addr_io_if] }, 3))
+			cpu.mbus.interrupt_flag_write(clear_bit(unsafe { cpu.mbus.memory[addr_io_if] }, 3))
 			cpu.interrupt_jump_to(data, interrupt_handler_serial)
 		} else if enable_joypad && flag_joypad {
-			cpu.interrupt_flag_write(clear_bit(unsafe { cpu.mbus.memory[addr_io_if] }, 4))
+			cpu.mbus.interrupt_flag_write(clear_bit(unsafe { cpu.mbus.memory[addr_io_if] }, 4))
 			cpu.interrupt_jump_to(data, interrupt_handler_joypad)
 		}
 	}

@@ -17,10 +17,10 @@ mut:
 	ic             u32
 	inst           ?CPUInstruction
 	clocks         u32
-	mbus           MemoryBus
+	mbus           &MemoryBus
 	interrupt_data InterruptData
-	timer          Timer
 	halt_bug       bool
+	halt_type      CPUHaltType = .none
 }
 
 fn (mut cpu CPU) reset() {
@@ -36,7 +36,7 @@ fn (mut cpu CPU) fetch(program []u8) {
 	$if debug_instructions ? {
 		println(cpu.r)
 	}
-	
+
 	cpu.opcode = cpu.mbus.read(program, cpu.r.pc)
 	cpu.r.pc++
 	is_extended_cb_inst := cpu.opcode == 0xCB
@@ -69,12 +69,22 @@ fn (mut cpu CPU) execute(program []u8) {
 }
 
 fn (mut cpu CPU) advance_clocks(clocks u8) {
-	cpu.timer.advance_clocks(mut cpu, clocks)
+	cpu.mbus.timer.advance_clocks(mut cpu, clocks)
 	cpu.clocks += clocks
+
+	if cpu.interrupt_data.enable_ime_delay > 0 {
+		for c in 0 .. clocks {
+			cpu.interrupt_data.enable_ime_delay--
+			if cpu.interrupt_data.enable_ime_delay == 0 {
+				cpu.interrupt_data.master_enable = true
+				break
+			}
+		}
+	}
 }
 
 fn (mut cpu CPU) tick(program []u8) {
-	if cpu.timer.halt_type == .none {
+	if cpu.halt_type == .none {
 		cpu.fetch(program)
 		cpu.execute(program)
 		cpu.ic++
@@ -90,7 +100,7 @@ fn (mut cpu CPU) set_flag_zero(val bool) {
 }
 
 fn (mut cpu CPU) get_flag_zero() bool {
-	return (cpu.r.af.lo() & ~(u32(1) << 7)) >> 7 != 0
+	return (cpu.r.af.lo() & (u32(1) << 7)) >> 7 != 0
 }
 
 fn (mut cpu CPU) set_flag_subtract(val bool) {
@@ -98,7 +108,7 @@ fn (mut cpu CPU) set_flag_subtract(val bool) {
 }
 
 fn (mut cpu CPU) get_flag_subtract() bool {
-	return (cpu.r.af.lo() & ~(u32(1) << 6)) >> 6 != 0
+	return (cpu.r.af.lo() & (u32(1) << 6)) >> 6 != 0
 }
 
 fn (mut cpu CPU) set_flag_half_carry(val bool) {
@@ -106,7 +116,7 @@ fn (mut cpu CPU) set_flag_half_carry(val bool) {
 }
 
 fn (mut cpu CPU) get_flag_half_carry() bool {
-	return (cpu.r.af.lo() & ~(u32(1) << 5)) >> 5 != 0
+	return (cpu.r.af.lo() & (u32(1) << 5)) >> 5 != 0
 }
 
 fn (mut cpu CPU) set_flag_carry(val bool) {
@@ -114,5 +124,5 @@ fn (mut cpu CPU) set_flag_carry(val bool) {
 }
 
 fn (mut cpu CPU) get_flag_carry() bool {
-	return (cpu.r.af.lo() & ~(u32(1) << 4)) >> 4 != 0
+	return (cpu.r.af.lo() & (u32(1) << 4)) >> 4 != 0
 }

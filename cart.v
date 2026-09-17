@@ -43,11 +43,11 @@ Header Checksum: 0x${c.header_checksum:x}
 Global Checksum: 0x${c.global_checksum_hi:x}${c.global_checksum_lo:x}'
 }
 
-fn cart_load(path string) ![]u8 {
+fn cart_load(path string) !([]u8, CartHeader) {
 	mut f := os.open(path)!
 	cart_data := f.read_bytes(max_cart_size)
 	f.seek(0, .start)!
 	header := f.read_raw_at[CartHeader](header_offset)!
 	println(header)
-	return cart_data
+	return cart_data, header
 }

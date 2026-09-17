@@ -11,7 +11,7 @@ mut:
 	tac  u8
 }
 
-enum TimerHaltType {
+enum CPUHaltType {
 	none
 	halt
 	stop
@@ -22,7 +22,7 @@ mut:
 	r               &TimerRegisters
 	sysclk          u16 = 0xabcc // after bootrom
 	interrupt_delay u8
-	halt_type       TimerHaltType = .none
+	iflag           &u8
 }
 
 fn (mut t Timer) reset() {
@@ -71,12 +71,12 @@ fn (mut t Timer) advance_clocks(mut cpu CPU, cycles u8) {
 		for c in 0 .. cycles {
 			t.interrupt_delay--
 			if t.interrupt_delay == 0 {
-				cpu.interrupt_raise_flag(interrupt_flag_timer)
+				cpu.mbus.interrupt_raise_flag(interrupt_flag_timer)
 				break
 			}
 		}
 	}
-	if t.halt_type == .stop {
+	if cpu.halt_type == .stop {
 		return
 	}
 	t.increase_div(cycles)

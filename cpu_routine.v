@@ -37,7 +37,7 @@ fn (mut cpu CPU) routine_ld_ptr16(data []u8, reg16 u16) u8 {
 
 fn (mut cpu CPU) routine_inc_n8(reg u8) u8 {
 	cpu.set_flag_subtract(true)
-	cpu.set_flag_half_carry((reg & 0xf) == 0x0)
+	cpu.set_flag_half_carry((reg & 0xf) == 0xf)
 	reg8 := reg + 1
 	cpu.set_flag_zero(reg8 == 0)
 	cpu.advance_clocks(4)
@@ -261,7 +261,7 @@ fn (mut cpu CPU) routine_jp_cond_a16(data []u8, cond bool) {
 fn (mut cpu CPU) routine_jr_cond_e8(data []u8, cond bool) {
 	cpu.advance_clocks(4)
 	if cond {
-		tmp := cpu.mbus.read(data, cpu.r.pc)
+		tmp := u8(cpu.mbus.read(data, cpu.r.pc))
 		cpu.r.pc++
 		cpu.advance_clocks(4)
 		cpu.r.pc = (cpu.r.pc + tmp) & 0xffff

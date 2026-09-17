@@ -110,8 +110,8 @@ fn inst_stop(mut cpu CPU, data []u8) {
 		println('CPU: corrupted STOP at PC cpu.r.pc, should have operand 0x00')
 	}
 	cpu.advance_clocks(4)
-	cpu.timer.on_div_write(0)
-	cpu.timer.halt_type = .stop
+	cpu.mbus.timer.on_div_write(0)
+	cpu.halt_type = .stop
 }
 
 // 0x11
@@ -358,7 +358,7 @@ fn inst_deci_hl(mut cpu CPU, data []u8) {
 	cpu.advance_clocks(4)
 	mut tmp := cpu.mbus.read(data, cpu.r.hl)
 	cpu.advance_clocks(4)
-	cpu.set_flag_subtract(false)
+	cpu.set_flag_subtract(true)
 	cpu.set_flag_half_carry(tmp & 0xf == 0)
 	tmp = (tmp - 1) & 0xff
 	cpu.set_flag_zero(tmp == 0)
@@ -745,7 +745,7 @@ fn inst_halt(mut cpu CPU, data []u8) {
 	if !cpu.interrupt_data.master_enable && interrupt_pending {
 		cpu.halt_bug = true
 	} else {
-		cpu.timer.halt_type = .halt
+		cpu.halt_type = .halt
 	}
 }
 
