@@ -73,7 +73,7 @@ fn (mut cpu CPU) advance_clocks(clocks u8) {
 	cpu.clocks += clocks
 
 	if cpu.interrupt_data.enable_ime_delay > 0 {
-		for c in 0 .. clocks {
+		for _ in 0 .. clocks {
 			cpu.interrupt_data.enable_ime_delay--
 			if cpu.interrupt_data.enable_ime_delay == 0 {
 				cpu.interrupt_data.master_enable = true

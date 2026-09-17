@@ -87,7 +87,7 @@ fn inst_rrc_hl(mut cpu CPU, data []u8) {
 	cpu.set_flag_subtract(false)
 	cpu.set_flag_half_carry(false)
 	cpu.set_flag_carry(tmp & 0x01 != 0)
-	tmp = tmp << 1 | u8(cpu.get_flag_carry()) << 7
+	tmp = tmp >> 1 | u8(cpu.get_flag_carry()) << 7
 	cpu.set_flag_zero(tmp == 0)
 	cpu.advance_clocks(4)
 	cpu.mbus.write(data, cpu.r.hl, tmp)
@@ -138,6 +138,7 @@ fn inst_rl_hl(mut cpu CPU, data []u8) {
 	c := cpu.get_flag_carry()
 	cpu.set_flag_carry(tmp & 0x80 != 0)
 	tmp = (tmp << 1 | u8(c)) & 0xff
+	cpu.set_flag_zero(tmp == 0)
 	cpu.advance_clocks(4)
 	cpu.mbus.write(data, cpu.r.hl, tmp)
 }
@@ -334,7 +335,7 @@ fn inst_swap_hl(mut cpu CPU, data []u8) {
 	cpu.set_flag_half_carry(false)
 	cpu.set_flag_carry(false)
 	tmp = ((tmp << 4) | (tmp >> 4)) & 0xff
-	cpu.set_flag_zero(false)
+	cpu.set_flag_zero(tmp == 0)
 	cpu.mbus.write(data, cpu.r.hl, tmp)
 }
 

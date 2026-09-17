@@ -272,6 +272,7 @@ const insts_unprefixed = [
 	CPUInstructionUnprefixed{'RST \$38', 1, inst_rst_38}, // 0xFF
 ]
 
+@[direct_array_access]
 fn inst(op u8) CPUInstruction {
 	return insts_unprefixed[op]
 }
@@ -535,6 +536,7 @@ const insts_prefixed = [
 	CPUInstructionPrefixed{'SET 7, A', inst_set_7_a}, // 0xFF
 ]
 
+@[direct_array_access]
 fn inst_prefixed(op u8) CPUInstruction {
 	return insts_prefixed[op]
 }

@@ -19,6 +19,15 @@ fn frame(mut app App) {
 }
 
 fn main() {
+	if os.args.len >= 3 && os.args[1] == 'test' {
+		mut max_inst := u32(0)
+		if os.args.len >= 4 {
+			max_inst = os.args[3].u32()
+		}
+		run_cpu_tests(os.args[2], max_inst)
+		return
+	}
+
 	if os.args.len != 2 {
 		println('Please pass rom file')
 		return

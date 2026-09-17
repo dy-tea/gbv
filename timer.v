@@ -34,7 +34,7 @@ fn (mut t Timer) reset() {
 }
 
 fn (mut t Timer) check_clock_edges(prev_sysclk u16) {
-	div_prev := t.r.div
+	_ := t.r.div
 	div_bit_4_prev := check_bit(t.r.div, 4)
 
 	t.r.div = u8(t.sysclk >> 8)
@@ -59,7 +59,7 @@ fn (mut t Timer) check_clock_edges(prev_sysclk u16) {
 }
 
 fn (mut t Timer) increase_div(cycles u8) {
-	for c in 0 .. cycles {
+	for _ in 0 .. cycles {
 		prev_sysclk := t.sysclk
 		t.sysclk++
 		t.check_clock_edges(prev_sysclk)
@@ -68,7 +68,7 @@ fn (mut t Timer) increase_div(cycles u8) {
 
 fn (mut t Timer) advance_clocks(mut cpu CPU, cycles u8) {
 	if t.interrupt_delay > 0 {
-		for c in 0 .. cycles {
+		for _ in 0 .. cycles {
 			t.interrupt_delay--
 			if t.interrupt_delay == 0 {
 				cpu.mbus.interrupt_raise_flag(interrupt_flag_timer)

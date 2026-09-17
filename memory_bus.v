@@ -14,13 +14,18 @@ mut:
 	ram_enabled         bool
 	rom_ram_mode_select bool
 	cart_header         CartHeader
+// Debug
+	serial_capture      bool
+	serial_buffer       []u8
 }
 
 fn MemoryBus.new() &MemoryBus {
 	memory := unsafe { C.malloc(1024 * 64 * 8) }
 	return &MemoryBus{
-		memory: memory
-		timer:  Timer{
+		memory:         memory
+		serial_capture: false
+		serial_buffer:  []u8{}
+		timer:          Timer{
 			r:     unsafe { &TimerRegisters(&u8(memory) + 0xff04) }
 			iflag: unsafe { &u8(memory) + 0xff0f }
 		}
@@ -44,6 +49,9 @@ fn (mb MemoryBus) read(data []u8, addr u16) u8 {
 
 	return match addr {
 		0x0000...0x3FFF { // ROM Bank 00
+			data[addr]
+		}
+		0x4000...0x7FFF { // ROM Bank 01
 			match cart_info.type {
 				.no_mbc {
 					data[addr]
@@ -55,12 +63,9 @@ fn (mb MemoryBus) read(data []u8, addr u16) u8 {
 					data[offset + addr]
 				}
 				else {
-					panic('TODO: read ROM Bank 00, ${cart_info.type}')
+					panic('Unhandled cart_info.type for ROM Bank 01: ${cart_info.type}')
 				}
 			}
-		}
-		0x4000...0x7FFF { // ROM Bank 01
-			data[addr]
 		}
 		0x8000...0x9FFF { // VRAM
 			unsafe { mb.memory[addr] }
@@ -177,9 +182,8 @@ fn (mut mb MemoryBus) write(data []u8, addr u16, val u8) {
 			match addr {
 				0xFF02 {
 					// Blargg serial output
-					if val == 0x81 {
-						c := unsafe { mb.memory[0xff01] }
-						println('Blargg SERIAL OUT: ${c}')
+					if val == 0x81 && mb.serial_capture {
+						mb.serial_buffer << unsafe { mb.memory[0xff01] }
 					}
 				}
 				0xFF04 { // Timer DIV
