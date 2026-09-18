@@ -32,12 +32,12 @@ fn (mut cpu CPU) reset() {
 	cpu.r.pc = 0x0100
 }
 
-fn (mut cpu CPU) fetch(program []u8) {
+fn (mut cpu CPU) fetch() {
 	$if debug_instructions ? {
 		println(cpu.r)
 	}
 
-	cpu.opcode = cpu.mbus.read(program, cpu.r.pc)
+	cpu.opcode = cpu.mbus.read(cpu.r.pc)
 	cpu.r.pc++
 	is_extended_cb_inst := cpu.opcode == 0xCB
 
@@ -48,7 +48,7 @@ fn (mut cpu CPU) fetch(program []u8) {
 
 	if is_extended_cb_inst {
 		cpu.advance_clocks(4)
-		opcode_cb := cpu.mbus.read(program, cpu.r.pc)
+		opcode_cb := cpu.mbus.read(cpu.r.pc)
 		cpu.r.pc++
 		cpu.inst = inst_prefixed(opcode_cb)
 	} else {
@@ -56,10 +56,10 @@ fn (mut cpu CPU) fetch(program []u8) {
 	}
 }
 
-fn (mut cpu CPU) execute(program []u8) {
+fn (mut cpu CPU) execute() {
 	if inst := cpu.inst {
 		if f := inst.function {
-			f(mut cpu, program)
+			f(mut cpu)
 		} else {
 			panic('unimplemented: ${inst.disassembly}')
 		}
@@ -83,16 +83,16 @@ fn (mut cpu CPU) advance_clocks(clocks u8) {
 	}
 }
 
-fn (mut cpu CPU) tick(program []u8) {
+fn (mut cpu CPU) tick() {
 	if cpu.halt_type == .none {
-		cpu.fetch(program)
-		cpu.execute(program)
+		cpu.fetch()
+		cpu.execute()
 		cpu.ic++
 	} else {
 		cpu.advance_clocks(4)
 	}
 
-	cpu.interrupt_service_routine(program)
+	cpu.interrupt_service_routine()
 }
 
 @[inline]

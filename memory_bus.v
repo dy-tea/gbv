@@ -5,6 +5,7 @@ const addr_io_ie = 0xffff // interrupt enable
 
 @[heap; noinit]
 struct MemoryBus {
+	data                []u8
 mut:
 	memory              &u8
 	timer               Timer
@@ -19,9 +20,10 @@ mut:
 	serial_buffer  []u8
 }
 
-fn MemoryBus.new() &MemoryBus {
+fn MemoryBus.new(data []u8) &MemoryBus {
 	memory := unsafe { C.malloc(1024 * 64 * 8) }
 	return &MemoryBus{
+		data:           data
 		memory:         memory
 		serial_capture: false
 		serial_buffer:  []u8{}
@@ -46,23 +48,23 @@ fn (mut mb MemoryBus) interrupt_raise_flag(flag u8) {
 	unsafe { mb.memory[addr_io_if] |= flag }
 }
 
-fn (mb MemoryBus) read(data []u8, addr u16) u8 {
+fn (mb MemoryBus) read(addr u16) u8 {
 	cart_info := cart_type_data[mb.cart_header.cartridge_type]
 
 	return match addr {
 		0x0000...0x3FFF { // ROM Bank 00
-			data[addr]
+			mb.data[addr]
 		}
 		0x4000...0x7FFF { // ROM Bank 01
 			match cart_info.type {
 				.no_mbc {
-					data[addr]
+					mb.data[addr]
 				}
 				.mbc1 {
 					rom_bank_size := 0x4000
 					rom_bank := if mb.rom_bank_num > 0 { mb.rom_bank_num } else { u8(1) }
 					offset := rom_bank_size * (rom_bank - 1)
-					data[offset + addr]
+					mb.data[offset + addr]
 				}
 				else {
 					panic('Unhandled cart_info.type for ROM Bank 01: ${cart_info.type}')
@@ -123,7 +125,7 @@ fn (mb MemoryBus) read(data []u8, addr u16) u8 {
 	}
 }
 
-fn (mut mb MemoryBus) write(data []u8, addr u16, val u8) {
+fn (mut mb MemoryBus) write(addr u16, val u8) {
 	cart_info := cart_type_data[mb.cart_header.cartridge_type]
 	if cart_info.type == .mbc1 {
 		match addr {
@@ -203,7 +205,7 @@ fn (mut mb MemoryBus) write(data []u8, addr u16, val u8) {
 					dest := 0xFE00
 					for i in 0 .. 160 {
 						unsafe {
-							mb.memory[dest + i] = mb.read(data, source_addr + i)
+							mb.memory[dest + i] = mb.read(source_addr + i)
 						}
 					}
 				}

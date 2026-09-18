@@ -3,12 +3,12 @@ module main
 struct CPUInstructionUnprefixed {
 	disassembly string
 	bytes       u8
-	function    ?fn (mut cpu CPU, data []u8)
+	function    ?fn (mut cpu CPU)
 }
 
 struct CPUInstructionPrefixed {
 	disassembly string
-	function    ?fn (mut cpu CPU, data []u8)
+	function    ?fn (mut cpu CPU)
 }
 
 type CPUInstruction = CPUInstructionUnprefixed | CPUInstructionPrefixed

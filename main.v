@@ -13,7 +13,7 @@ mut:
 fn frame(mut app App) {
 	app.gg.begin()
 
-	app.cpu.tick(app.data)
+	app.cpu.tick()
 
 	app.gg.end()
 }
@@ -33,7 +33,7 @@ fn main() {
 		return
 	}
 	data, cart_header := cart_load(os.args[1])!
-	mut mbus := MemoryBus.new()
+	mut mbus := MemoryBus.new(data)
 	mbus.cart_header = cart_header
 	mut app := &App{
 		cpu:  CPU{

@@ -23,7 +23,7 @@ fn run_one(path string, max_inst u32) {
 		eprintln('failed to load ${path}: ${err}')
 		return
 	}
-	mut mbus := MemoryBus.new()
+	mut mbus := MemoryBus.new(data)
 	mbus.cart_header = cart_header
 	mbus.serial_capture = true
 	mut cpu := CPU{
@@ -38,7 +38,7 @@ fn run_one(path string, max_inst u32) {
 	mut eram_result := -1
 
 	for cpu.ic < max_inst {
-		cpu.tick(data)
+		cpu.tick()
 
 		out := mbus.serial_buffer
 		if !finished && out.len != out_len {
@@ -63,13 +63,13 @@ fn run_one(path string, max_inst u32) {
 		}
 	}
 
-	report(path, cpu, finished, data, eram_result)
+	report(path, cpu, finished, eram_result)
 }
 
-fn capture_eram_output(mbus &MemoryBus, data []u8) string {
+fn capture_eram_output(mbus &MemoryBus) string {
 	mut text := ''
 	for offset in u16(0) .. 256 {
-		c := mbus.read(data, 0xA004 + offset)
+		c := mbus.read(0xA004 + offset)
 		if c == 0 {
 			break
 		}
@@ -90,10 +90,10 @@ fn is_final_line(out string) bool {
 	return last == 'Passed' || last == 'Done' || last == 'Failed' || last == 'Passed all tests' || last.starts_with('Failed #')
 }
 
-fn report(path string, cpu CPU, finished bool, data []u8, eram_result int) {
+fn report(path string, cpu CPU, finished bool, eram_result int) {
 	out := cpu.mbus.serial_buffer.bytestr()
 	eram_text := if out.len == 0 {
-		capture_eram_output(cpu.mbus, data)
+		capture_eram_output(cpu.mbus)
 	} else {
 		''
 	}
