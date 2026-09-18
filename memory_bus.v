@@ -14,9 +14,9 @@ mut:
 	ram_enabled         bool
 	rom_ram_mode_select bool
 	cart_header         CartHeader
-// Debug
-	serial_capture      bool
-	serial_buffer       []u8
+	// Debug
+	serial_capture bool
+	serial_buffer  []u8
 }
 
 fn MemoryBus.new() &MemoryBus {
@@ -28,6 +28,8 @@ fn MemoryBus.new() &MemoryBus {
 		timer:          Timer{
 			r:     unsafe { &TimerRegisters(&u8(memory) + 0xff04) }
 			iflag: unsafe { &u8(memory) + 0xff0f }
+			ly:    unsafe { &u8(memory) + 0xff44 }
+			lcdc:  unsafe { &u8(memory) + 0xff40 }
 		}
 	}
 }
@@ -103,7 +105,11 @@ fn (mb MemoryBus) read(data []u8, addr u16) u8 {
 			0x00
 		}
 		0xFF00...0xFF7F { // I/O Registers
-			unsafe { mb.memory[addr] }
+			if addr == addr_io_if {
+				unsafe { mb.memory[addr] | 0xE0 }
+			} else {
+				unsafe { mb.memory[addr] }
+			}
 		}
 		0xFF80...0xFFFE { // High RAM
 			unsafe { mb.memory[addr] }
@@ -137,7 +143,7 @@ fn (mut mb MemoryBus) write(data []u8, addr u16, val u8) {
 					mb.rom_bank_num = (mb.rom_bank_num & 0b00011111) | ((val & 0b00000011) << 5)
 				}
 			}
-			0x6000...0x7FFF { // Set ROM/RAM Bank mode select 
+			0x6000...0x7FFF { // Set ROM/RAM Bank mode select
 				mb.rom_ram_mode_select = val & 1 != 0
 			}
 			else {}

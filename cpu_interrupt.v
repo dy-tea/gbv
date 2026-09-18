@@ -23,7 +23,9 @@ fn (mut cpu CPU) interrupt_service_routine(data []u8) {
 
 	if interrupt_pending {
 		if cpu.halt_type == .halt {
-			cpu.advance_clocks(4)
+			if !cpu.interrupt_data.master_enable {
+				cpu.advance_clocks(4)
+			}
 			cpu.halt_type = .none
 		}
 

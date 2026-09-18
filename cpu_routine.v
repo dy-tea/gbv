@@ -24,14 +24,14 @@ fn (mut cpu CPU) routine_ld_n16(data []u8) u16 {
 
 fn (mut cpu CPU) routine_ld_ptr8(data []u8, reg16 u16, reg8 u8) {
 	cpu.advance_clocks(4)
-	cpu.mbus.write(data, reg16, reg8)
 	cpu.advance_clocks(4)
+	cpu.mbus.write(data, reg16, reg8)
 }
 
 fn (mut cpu CPU) routine_ld_ptr16(data []u8, reg16 u16) u8 {
 	cpu.advance_clocks(4)
-	reg8 := cpu.mbus.read(data, reg16)
 	cpu.advance_clocks(4)
+	reg8 := cpu.mbus.read(data, reg16)
 	return reg8
 }
 
@@ -176,7 +176,6 @@ fn (mut cpu CPU) routine_push_n16(data []u8, reg Register) {
 	cpu.r.sp &= 0xffff
 	cpu.advance_clocks(4)
 	cpu.mbus.write(data, cpu.r.sp, reg.hi())
-	cpu.advance_clocks(4)
 	cpu.r.sp--
 	cpu.r.sp &= 0xffff
 	cpu.advance_clocks(4)
@@ -184,7 +183,7 @@ fn (mut cpu CPU) routine_push_n16(data []u8, reg Register) {
 	cpu.advance_clocks(4)
 }
 
-fn (mut cpu CPU) routine_pop_n16(data []u8, reg u16) u16 {
+fn (mut cpu CPU) routine_pop_n16(data []u8) u16 {
 	cpu.advance_clocks(4)
 	lo := cpu.mbus.read(data, cpu.r.sp)
 	cpu.r.sp++
@@ -238,6 +237,7 @@ fn (mut cpu CPU) routine_ret_cond(data []u8, cond bool) {
 		cpu.r.sp &= 0xffff
 		cpu.advance_clocks(4)
 		cpu.r.pc = tmp
+		cpu.advance_clocks(4)
 		cpu.advance_clocks(4)
 	} else {
 		cpu.advance_clocks(4)
@@ -383,10 +383,10 @@ fn (mut cpu CPU) routine_res_n_n8(bit u8, reg u8) u8 {
 
 fn (mut cpu CPU) routine_res_n_ptrhl(data []u8, bit u8) {
 	cpu.advance_clocks(4)
+	cpu.advance_clocks(4)
 	tmp := cpu.mbus.read(data, cpu.r.hl)
 	cpu.advance_clocks(4)
 	cpu.mbus.write(data, cpu.r.hl, tmp & ~(1 << bit))
-	cpu.advance_clocks(4)
 }
 
 fn (mut cpu CPU) routine_set_n_n8(bit u8, reg u8) u8 {
@@ -396,8 +396,8 @@ fn (mut cpu CPU) routine_set_n_n8(bit u8, reg u8) u8 {
 
 fn (mut cpu CPU) routine_set_n_ptrhl(data []u8, bit u8) {
 	cpu.advance_clocks(4)
+	cpu.advance_clocks(4)
 	tmp := cpu.mbus.read(data, cpu.r.hl)
 	cpu.advance_clocks(4)
 	cpu.mbus.write(data, cpu.r.hl, tmp | (1 << bit))
-	cpu.advance_clocks(4)
 }

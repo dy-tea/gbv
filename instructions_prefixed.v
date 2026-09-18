@@ -33,8 +33,8 @@ fn inst_rlc_l(mut cpu CPU, _ []u8) {
 // 0x06
 fn inst_rlc_hl(mut cpu CPU, data []u8) {
 	cpu.advance_clocks(4)
-	mut tmp := cpu.mbus.read(data, cpu.r.hl)
 	cpu.advance_clocks(4)
+	mut tmp := cpu.mbus.read(data, cpu.r.hl)
 	cpu.set_flag_subtract(false)
 	cpu.set_flag_half_carry(false)
 	cpu.set_flag_carry(tmp & 0x80 != 0)
@@ -82,8 +82,8 @@ fn inst_rrc_l(mut cpu CPU, _ []u8) {
 // 0x0E
 fn inst_rrc_hl(mut cpu CPU, data []u8) {
 	cpu.advance_clocks(4)
-	mut tmp := cpu.mbus.read(data, cpu.r.hl)
 	cpu.advance_clocks(4)
+	mut tmp := cpu.mbus.read(data, cpu.r.hl)
 	cpu.set_flag_subtract(false)
 	cpu.set_flag_half_carry(false)
 	cpu.set_flag_carry(tmp & 0x01 != 0)
@@ -131,8 +131,8 @@ fn inst_rl_l(mut cpu CPU, _ []u8) {
 // 0x16
 fn inst_rl_hl(mut cpu CPU, data []u8) {
 	cpu.advance_clocks(4)
-	mut tmp := cpu.mbus.read(data, cpu.r.hl)
 	cpu.advance_clocks(4)
+	mut tmp := cpu.mbus.read(data, cpu.r.hl)
 	cpu.set_flag_subtract(false)
 	cpu.set_flag_half_carry(false)
 	c := cpu.get_flag_carry()
@@ -181,8 +181,8 @@ fn inst_rr_l(mut cpu CPU, _ []u8) {
 // 0x1E
 fn inst_rr_hl(mut cpu CPU, data []u8) {
 	cpu.advance_clocks(4)
-	mut tmp := cpu.mbus.read(data, cpu.r.hl)
 	cpu.advance_clocks(4)
+	mut tmp := cpu.mbus.read(data, cpu.r.hl)
 	cpu.set_flag_subtract(false)
 	cpu.set_flag_half_carry(false)
 	c := cpu.get_flag_carry()
@@ -231,8 +231,8 @@ fn inst_sla_l(mut cpu CPU, _ []u8) {
 // 0x26
 fn inst_sla_hl(mut cpu CPU, data []u8) {
 	cpu.advance_clocks(4)
-	mut tmp := cpu.mbus.read(data, cpu.r.hl)
 	cpu.advance_clocks(4)
+	mut tmp := cpu.mbus.read(data, cpu.r.hl)
 	cpu.set_flag_subtract(false)
 	cpu.set_flag_half_carry(false)
 	cpu.set_flag_carry(tmp & 0x80 != 0)
@@ -280,8 +280,8 @@ fn inst_sra_l(mut cpu CPU, _ []u8) {
 // 0x2E
 fn inst_sra_hl(mut cpu CPU, data []u8) {
 	cpu.advance_clocks(4)
-	mut tmp := cpu.mbus.read(data, cpu.r.hl)
 	cpu.advance_clocks(4)
+	mut tmp := cpu.mbus.read(data, cpu.r.hl)
 	cpu.set_flag_subtract(false)
 	cpu.set_flag_half_carry(false)
 	cpu.set_flag_carry(tmp & 0x01 != 0)
@@ -329,13 +329,14 @@ fn inst_swap_l(mut cpu CPU, _ []u8) {
 // 0x36
 fn inst_swap_hl(mut cpu CPU, data []u8) {
 	cpu.advance_clocks(4)
-	mut tmp := cpu.mbus.read(data, cpu.r.hl)
 	cpu.advance_clocks(4)
+	mut tmp := cpu.mbus.read(data, cpu.r.hl)
 	cpu.set_flag_subtract(false)
 	cpu.set_flag_half_carry(false)
 	cpu.set_flag_carry(false)
 	tmp = ((tmp << 4) | (tmp >> 4)) & 0xff
 	cpu.set_flag_zero(tmp == 0)
+	cpu.advance_clocks(4)
 	cpu.mbus.write(data, cpu.r.hl, tmp)
 }
 
@@ -377,8 +378,8 @@ fn inst_srl_l(mut cpu CPU, _ []u8) {
 // 0x3E
 fn inst_srl_hl(mut cpu CPU, data []u8) {
 	cpu.advance_clocks(4)
-	mut tmp := cpu.mbus.read(data, cpu.r.hl)
 	cpu.advance_clocks(4)
+	mut tmp := cpu.mbus.read(data, cpu.r.hl)
 	cpu.set_flag_subtract(false)
 	cpu.set_flag_half_carry(false)
 	cpu.set_flag_carry(tmp & 0x01 != 0)

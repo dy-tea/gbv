@@ -34,8 +34,12 @@ fn run_one(path string, max_inst u32) {
 
 	mut finished := false
 	mut out_len := 0
+	mut eram_init_seen := false
+	mut eram_result := -1
+
 	for cpu.ic < max_inst {
 		cpu.tick(data)
+
 		out := mbus.serial_buffer
 		if !finished && out.len != out_len {
 			out_len = out.len
@@ -47,37 +51,68 @@ fn run_one(path string, max_inst u32) {
 			break
 		}
 		finished = finished && out.len == out_len
+
+		if !finished {
+			eram0 := unsafe { mbus.eram[0] }
+			if eram0 == 0x80 {
+				eram_init_seen = true
+			} else if eram_init_seen && eram0 != 0x80 {
+				eram_result = int(eram0)
+				break
+			}
+		}
 	}
 
-	report(path, cpu, finished)
+	report(path, cpu, finished, data, eram_result)
+}
+
+fn capture_eram_output(mbus &MemoryBus, data []u8) string {
+	mut text := ''
+	for offset in u16(0) .. 256 {
+		c := mbus.read(data, 0xA004 + offset)
+		if c == 0 {
+			break
+		}
+		text += rune(c).str()
+	}
+	return text
 }
 
 fn is_final_line(out string) bool {
 	lines := out.split_into_lines().filter(|l| l.trim_space() != '')
+
 	if lines.len == 0 {
 		return false
 	}
+
 	last := lines[lines.len - 1].trim_space()
+
 	return last == 'Passed' || last == 'Done' || last == 'Failed' || last == 'Passed all tests' || last.starts_with('Failed #')
 }
 
-fn report(path string, cpu CPU, finished bool) {
+fn report(path string, cpu CPU, finished bool, data []u8, eram_result int) {
 	out := cpu.mbus.serial_buffer.bytestr()
-	status := if finished { 'DONE' } else { 'TIMEOUT' }
+	eram_text := if out.len == 0 {
+		capture_eram_output(cpu.mbus, data)
+	} else {
+		''
+	}
+
+	status := if finished || eram_result >= 0 { 'DONE' } else { 'TIMEOUT' }
 
 	println('')
 	println('${os.file_name(path)} [${status}]')
 	if out.len > 0 {
 		println(out)
+	} else if eram_text.len > 0 {
+		println(eram_text)
 	} else {
 		println('(no serial output)')
 	}
 	println('instructions executed: ${cpu.ic}\n')
 
 	lines := out.split_into_lines().filter(|l| l.trim_space() != '')
-	if lines.len == 0 {
-		println('RESULT: NO OUTPUT')
-	} else {
+	if lines.len > 0 {
 		last := lines[lines.len - 1].trim_space()
 		if last == 'Passed' || last == 'Done' || last == 'Passed all tests' {
 			println('RESULT: PASS')
@@ -86,5 +121,16 @@ fn report(path string, cpu CPU, finished bool) {
 		} else {
 			println('RESULT: UNKNOWN (${last})')
 		}
+		return
+	}
+
+	if eram_result >= 0 {
+		if eram_result == 0 {
+			println('RESULT: PASS')
+		} else {
+			println('RESULT: FAIL')
+		}
+	} else {
+		println('RESULT: NO OUTPUT')
 	}
 }

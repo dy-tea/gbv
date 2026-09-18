@@ -54,11 +54,10 @@ fn inst_ld_a16_sp(mut cpu CPU, data []u8) {
 	tmp |= u16(cpu.mbus.read(data, cpu.r.pc)) << 8
 	cpu.r.pc++
 	cpu.advance_clocks(4)
+	cpu.advance_clocks(4)
 	cpu.mbus.write(data, tmp, cpu.r.sp.lo())
-	tmp++
 	cpu.advance_clocks(4)
-	cpu.mbus.write(data, tmp, cpu.r.sp.hi())
-	cpu.advance_clocks(4)
+	cpu.mbus.write(data, tmp + 1, cpu.r.sp.hi())
 }
 
 // 0x09
@@ -219,9 +218,9 @@ fn inst_ld_hl_n16(mut cpu CPU, data []u8) {
 // 0x22
 fn inst_ldi_hl_a(mut cpu CPU, data []u8) {
 	cpu.advance_clocks(4)
+	cpu.advance_clocks(4)
 	cpu.mbus.write(data, cpu.r.hl, cpu.r.af.hi())
 	cpu.r.hl = (cpu.r.hl + 1) & 0xffff
-	cpu.advance_clocks(4)
 }
 
 // 0x23
@@ -245,7 +244,7 @@ fn inst_ld_h_n8(mut cpu CPU, data []u8) {
 }
 
 // 0x27
-fn inst_daa(mut cpu CPU, data []u8) {
+fn inst_daa(mut cpu CPU, _ []u8) {
 	if cpu.get_flag_subtract() {
 		if cpu.get_flag_carry() {
 			cpu.r.af.set_hi(cpu.r.af.hi() - 0x60)
@@ -280,8 +279,8 @@ fn inst_add_hl_hl(mut cpu CPU, _ []u8) {
 // 0x2A
 fn inst_ldi_a_hl(mut cpu CPU, data []u8) {
 	cpu.advance_clocks(4)
-	cpu.r.af.set_hi(cpu.mbus.read(data, cpu.r.hl))
 	cpu.advance_clocks(4)
+	cpu.r.af.set_hi(cpu.mbus.read(data, cpu.r.hl))
 	cpu.r.hl = (cpu.r.hl + 1) & 0xffff
 }
 
@@ -326,9 +325,9 @@ fn inst_ld_sp_n16(mut cpu CPU, data []u8) {
 // 0x32
 fn inst_ldd_hl_a(mut cpu CPU, data []u8) {
 	cpu.advance_clocks(4)
+	cpu.advance_clocks(4)
 	cpu.mbus.write(data, cpu.r.hl, cpu.r.af.hi())
 	cpu.r.hl = (cpu.r.hl - 1) & 0xffff
-	cpu.advance_clocks(4)
 }
 
 // 0x33
@@ -339,8 +338,8 @@ fn inst_inc_sp(mut cpu CPU, _ []u8) {
 // 0x34
 fn inst_inci_hl(mut cpu CPU, data []u8) {
 	cpu.advance_clocks(4)
-	mut tmp := cpu.mbus.read(data, cpu.r.hl)
 	cpu.advance_clocks(4)
+	mut tmp := cpu.mbus.read(data, cpu.r.hl)
 	cpu.set_flag_subtract(false)
 	cpu.set_flag_half_carry(tmp & 0xf == 0xf)
 	tmp = (tmp + 1) & 0xff
@@ -352,8 +351,8 @@ fn inst_inci_hl(mut cpu CPU, data []u8) {
 // 0x35
 fn inst_deci_hl(mut cpu CPU, data []u8) {
 	cpu.advance_clocks(4)
-	mut tmp := cpu.mbus.read(data, cpu.r.hl)
 	cpu.advance_clocks(4)
+	mut tmp := cpu.mbus.read(data, cpu.r.hl)
 	cpu.set_flag_subtract(true)
 	cpu.set_flag_half_carry(tmp & 0xf == 0)
 	tmp = (tmp - 1) & 0xff
@@ -368,8 +367,8 @@ fn inst_ldi_hl_n8(mut cpu CPU, data []u8) {
 	tmp := cpu.mbus.read(data, cpu.r.pc)
 	cpu.r.pc++
 	cpu.advance_clocks(4)
-	cpu.mbus.write(data, cpu.r.hl, tmp)
 	cpu.advance_clocks(4)
+	cpu.mbus.write(data, cpu.r.hl, tmp)
 }
 
 // 0x37
@@ -393,8 +392,8 @@ fn inst_add_hl_sp(mut cpu CPU, _ []u8) {
 // 0x3A
 fn inst_ldd_a_hl(mut cpu CPU, data []u8) {
 	cpu.advance_clocks(4)
-	cpu.r.af.set_hi(cpu.mbus.read(data, cpu.r.hl))
 	cpu.advance_clocks(4)
+	cpu.r.af.set_hi(cpu.mbus.read(data, cpu.r.hl))
 	cpu.r.hl = (cpu.r.hl - 1) & 0xffff
 }
 
@@ -738,8 +737,12 @@ fn inst_halt(mut cpu CPU, data []u8) {
 	interrupt_enable := cpu.mbus.read(data, addr_io_ie)
 	interrupt_flag := cpu.mbus.read(data, addr_io_if)
 	interrupt_pending := (interrupt_enable & interrupt_flag) & 0x1f != 0
-	if !cpu.interrupt_data.master_enable && interrupt_pending {
-		cpu.halt_bug = true
+	if interrupt_pending {
+		if cpu.interrupt_data.master_enable {
+			cpu.r.pc--
+		} else {
+			cpu.halt_bug = true
+		}
 	} else {
 		cpu.halt_type = .halt
 	}
@@ -831,10 +834,10 @@ fn inst_adi_a_hl(mut cpu CPU, data []u8) {
 	cpu.advance_clocks(4)
 	cpu.set_flag_subtract(false)
 	a := cpu.r.af.hi()
+	cpu.advance_clocks(4)
 	hl := cpu.mbus.read(data, cpu.r.hl)
 	cpu.set_flag_half_carry((a & 0xf) + (hl & 0xf) > 0xf)
-	cpu.advance_clocks(4)
-	cpu.r.af.set_hi(cpu.r.af.hi() + hl)
+	cpu.r.af.set_hi(a + hl)
 	cpu.set_flag_zero(cpu.r.af.hi() == 0)
 	cpu.set_flag_carry(a > cpu.r.af.hi())
 }
@@ -878,6 +881,7 @@ fn inst_adc_a_l(mut cpu CPU, _ []u8) {
 fn inst_adc_a_hl(mut cpu CPU, data []u8) {
 	cpu.advance_clocks(4)
 	cpu.set_flag_subtract(false)
+	cpu.advance_clocks(4)
 	hl := cpu.mbus.read(data, cpu.r.hl)
 	carry := u16(cpu.get_flag_carry())
 	a := u16(cpu.r.af.hi()) + u16(hl) + carry
@@ -925,8 +929,8 @@ fn inst_sub_a_l(mut cpu CPU, _ []u8) {
 // 0x96
 fn inst_sub_a_hl(mut cpu CPU, data []u8) {
 	cpu.advance_clocks(4)
-	tmp := cpu.mbus.read(data, cpu.r.hl)
 	cpu.advance_clocks(4)
+	tmp := cpu.mbus.read(data, cpu.r.hl)
 	cpu.set_flag_subtract(true)
 	cpu.set_flag_half_carry((cpu.r.af.hi() & 0xf) < (tmp & 0xf))
 	cpu.set_flag_carry(cpu.r.af.hi() < tmp)
@@ -977,8 +981,8 @@ fn inst_sbc_a_l(mut cpu CPU, _ []u8) {
 // 0x9E
 fn inst_sbc_a_hl(mut cpu CPU, data []u8) {
 	cpu.advance_clocks(4)
-	hl := cpu.mbus.read(data, cpu.r.hl)
 	cpu.advance_clocks(4)
+	hl := cpu.mbus.read(data, cpu.r.hl)
 	carry := u16(cpu.get_flag_carry())
 	a := u16(cpu.r.af.hi())
 	b := u16(hl) + carry
@@ -1185,9 +1189,9 @@ fn inst_cp_a_l(mut cpu CPU, _ []u8) {
 // 0xBE
 fn inst_cp_a_hl(mut cpu CPU, data []u8) {
 	cpu.advance_clocks(4)
-	cpu.set_flag_subtract(true)
-	tmp := cpu.mbus.read(data, cpu.r.hl)
 	cpu.advance_clocks(4)
+	tmp := cpu.mbus.read(data, cpu.r.hl)
+	cpu.set_flag_subtract(true)
 	cpu.set_flag_half_carry((cpu.r.af.hi() & 0xf) < (tmp & 0xf))
 	cpu.set_flag_carry(cpu.r.af.hi() < tmp)
 	cpu.set_flag_zero(cpu.r.af.hi() == tmp)
@@ -1209,7 +1213,7 @@ fn inst_ret_nz(mut cpu CPU, data []u8) {
 
 // 0xC1
 fn inst_pop_bc(mut cpu CPU, data []u8) {
-	cpu.r.bc = cpu.routine_pop_n16(data, cpu.r.bc)
+	cpu.r.bc = cpu.routine_pop_n16(data)
 }
 
 // 0xC2
@@ -1307,6 +1311,7 @@ fn inst_call_a16(mut cpu CPU, data []u8) {
 	cpu.mbus.write(data, cpu.r.sp, cpu.r.pc.lo())
 	cpu.advance_clocks(4)
 	cpu.r.pc = tmp
+	cpu.advance_clocks(4)
 }
 
 // 0xCE
@@ -1336,7 +1341,7 @@ fn inst_ret_nc(mut cpu CPU, data []u8) {
 
 // 0xD1
 fn inst_pop_de(mut cpu CPU, data []u8) {
-	cpu.r.de = cpu.routine_pop_n16(data, cpu.r.de)
+	cpu.r.de = cpu.routine_pop_n16(data)
 }
 
 // 0xD2
@@ -1430,20 +1435,20 @@ fn inst_ldh_a8_a(mut cpu CPU, data []u8) {
 	tmp := 0xff00 + u16(cpu.mbus.read(data, cpu.r.pc))
 	cpu.r.pc++
 	cpu.advance_clocks(4)
-	cpu.mbus.write(data, tmp, cpu.r.af.hi())
 	cpu.advance_clocks(4)
+	cpu.mbus.write(data, tmp, cpu.r.af.hi())
 }
 
 // 0xE1
 fn inst_pop_hl(mut cpu CPU, data []u8) {
-	cpu.r.hl = cpu.routine_pop_n16(data, cpu.r.hl)
+	cpu.r.hl = cpu.routine_pop_n16(data)
 }
 
 // 0xE2
 fn inst_ldh_c_a(mut cpu CPU, data []u8) {
 	cpu.advance_clocks(4)
-	cpu.mbus.write(data, u16(0xff00 + cpu.r.bc.lo()), cpu.r.af.hi())
 	cpu.advance_clocks(4)
+	cpu.mbus.write(data, u16(0xff00 + cpu.r.bc.lo()), cpu.r.af.hi())
 }
 
 // 0xE5
@@ -1500,6 +1505,7 @@ fn inst_ld_a16_a(mut cpu CPU, data []u8) {
 	cpu.r.pc++
 	cpu.r.pc &= 0xffff
 	cpu.advance_clocks(4)
+	cpu.advance_clocks(4)
 	cpu.mbus.write(data, tmp, cpu.r.af.hi())
 }
 
@@ -1526,21 +1532,21 @@ fn inst_ldh_a_a8(mut cpu CPU, data []u8) {
 	tmp := 0xff00 + u16(cpu.mbus.read(data, cpu.r.pc))
 	cpu.r.pc++
 	cpu.advance_clocks(4)
-	cpu.r.af.set_hi(cpu.mbus.read(data, tmp))
 	cpu.advance_clocks(4)
+	cpu.r.af.set_hi(cpu.mbus.read(data, tmp))
 }
 
 // 0xF1
 fn inst_pop_af(mut cpu CPU, data []u8) {
-	cpu.r.af = cpu.routine_pop_n16(data, cpu.r.af)
-	cpu.r.af &= 0xfff0
+	cpu.r.af = cpu.routine_pop_n16(data)
+	cpu.r.af.set_lo(cpu.r.af.lo() & 0xF0)
 }
 
 // 0xF2
 fn inst_ldh_a_c(mut cpu CPU, data []u8) {
 	cpu.advance_clocks(4)
-	cpu.r.af.set_hi(cpu.mbus.read(data, u16(0xff00 + cpu.r.bc.lo())))
 	cpu.advance_clocks(4)
+	cpu.r.af.set_hi(cpu.mbus.read(data, u16(0xff00 + cpu.r.bc.lo())))
 }
 
 // 0xF3
@@ -1606,8 +1612,8 @@ fn inst_ld_a_a16(mut cpu CPU, data []u8) {
 	cpu.r.pc++
 	cpu.r.pc &= 0xffff
 	cpu.advance_clocks(4)
-	cpu.r.af.set_hi(cpu.mbus.read(data, tmp))
 	cpu.advance_clocks(4)
+	cpu.r.af.set_hi(cpu.mbus.read(data, tmp))
 }
 
 // 0xFB

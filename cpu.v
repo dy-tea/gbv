@@ -95,34 +95,42 @@ fn (mut cpu CPU) tick(program []u8) {
 	cpu.interrupt_service_routine(program)
 }
 
+@[inline]
 fn (mut cpu CPU) set_flag_zero(val bool) {
 	cpu.r.af.set_lo(u8((cpu.r.af.lo() & ~(u32(1) << 7)) | (u32(val) << 7)))
 }
 
+@[inline]
 fn (mut cpu CPU) get_flag_zero() bool {
 	return (cpu.r.af.lo() & (u32(1) << 7)) >> 7 != 0
 }
 
+@[inline]
 fn (mut cpu CPU) set_flag_subtract(val bool) {
 	cpu.r.af.set_lo(u8((cpu.r.af.lo() & ~(u32(1) << 6)) | (u32(val) << 6)))
 }
 
+@[inline]
 fn (mut cpu CPU) get_flag_subtract() bool {
 	return (cpu.r.af.lo() & (u32(1) << 6)) >> 6 != 0
 }
 
+@[inline]
 fn (mut cpu CPU) set_flag_half_carry(val bool) {
 	cpu.r.af.set_lo(u8((cpu.r.af.lo() & ~(u32(1) << 5)) | (u32(val) << 5)))
 }
 
+@[inline]
 fn (mut cpu CPU) get_flag_half_carry() bool {
 	return (cpu.r.af.lo() & (u32(1) << 5)) >> 5 != 0
 }
 
+@[inline]
 fn (mut cpu CPU) set_flag_carry(val bool) {
 	cpu.r.af.set_lo(u8((cpu.r.af.lo() & ~(u32(1) << 4)) | (u32(val) << 4)))
 }
 
+@[inline]
 fn (mut cpu CPU) get_flag_carry() bool {
 	return (cpu.r.af.lo() & (u32(1) << 4)) >> 4 != 0
 }
