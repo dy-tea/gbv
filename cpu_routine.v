@@ -386,7 +386,7 @@ fn (mut cpu CPU) routine_res_n_ptrhl(bit u8) {
 	cpu.advance_clocks(4)
 	tmp := cpu.mbus.read(cpu.r.hl)
 	cpu.advance_clocks(4)
-	cpu.mbus.write(cpu.r.hl, tmp & ~(1 << bit))
+	cpu.mbus.write(cpu.r.hl, tmp & ~u8(1 << bit))
 }
 
 fn (mut cpu CPU) routine_set_n_n8(bit u8, reg u8) u8 {
@@ -399,5 +399,5 @@ fn (mut cpu CPU) routine_set_n_ptrhl(bit u8) {
 	cpu.advance_clocks(4)
 	tmp := cpu.mbus.read(cpu.r.hl)
 	cpu.advance_clocks(4)
-	cpu.mbus.write(cpu.r.hl, tmp | (1 << bit))
+	cpu.mbus.write(cpu.r.hl, tmp | u8(1 << bit))
 }

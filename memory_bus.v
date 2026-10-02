@@ -205,7 +205,7 @@ fn (mut mb MemoryBus) write(addr u16, val u8) {
 					dest := 0xFE00
 					for i in 0 .. 160 {
 						unsafe {
-							mb.memory[dest + i] = mb.read(source_addr + i)
+							mb.memory[dest + i] = mb.read(source_addr + u16(i))
 						}
 					}
 				}
