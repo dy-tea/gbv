@@ -28,8 +28,8 @@ struct CartTypeInfo {
 
 // vfmt off
 const cart_type_data = [
-//              |      type     | ram  | batt | timr | rmbl | accl |                  name                  || hex
-// ================================================================================================================
+//            |      type     | ram  | batt | timr | rmbl | accl |                  name                  || hex
+// ==============================================================================================================
 	CartTypeInfo{.no_mbc,        false, false, false, false, false, 'No MBC, ROM Only'}                     // 0x00
 	CartTypeInfo{.mbc1,          false, false, false, false, false, 'MBC1'}                                 // 0x01
 	CartTypeInfo{.mbc1,          true,  false, false, false, false, 'MBC1 + RAM'}                           // 0x02

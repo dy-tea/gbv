@@ -4,6 +4,7 @@ import os
 
 const test_max_instructions = u32(30_000_000)
 const test_finish_grace = u32(200_000)
+const test_max_ticks = u32(500_000_000)
 
 fn run_cpu_tests(path string, max_inst u32) {
 	max := if max_inst > 0 { max_inst } else { test_max_instructions }
@@ -23,37 +24,34 @@ fn run_one(path string, max_inst u32) {
 		eprintln('failed to load ${path}: ${err}')
 		return
 	}
-	mut mbus := MemoryBus.new(data)
-	mbus.cart_header = cart_header
-	mbus.serial_capture = true
-	mut cpu := CPU{
-		mbus: mbus
-	}
-	cpu.reset()
-	cpu.mbus.timer.reset()
+	mut gb := GB.new(data, cart_header)
+	gb.mbus.serial_capture = true
+	gb.reset()
 
 	mut finished := false
 	mut out_len := 0
 	mut eram_init_seen := false
 	mut eram_result := -1
+	mut ticks := u32(0)
 
-	for cpu.ic < max_inst {
-		cpu.tick()
+	for gb.cpu.ic < max_inst && ticks < test_max_ticks {
+		gb.cpu.tick()
+		ticks++
 
-		out := mbus.serial_buffer
+		out := gb.mbus.serial_buffer
 		if !finished && out.len != out_len {
 			out_len = out.len
 			if is_final_line(out.bytestr()) {
 				finished = true
 			}
 		}
-		if finished && cpu.ic >= max_inst - test_finish_grace {
+		if finished && gb.cpu.ic >= max_inst - test_finish_grace {
 			break
 		}
 		finished = finished && out.len == out_len
 
 		if !finished {
-			eram0 := unsafe { mbus.eram[0] }
+			eram0 := unsafe { gb.mbus.eram[0] }
 			if eram0 == 0x80 {
 				eram_init_seen = true
 			} else if eram_init_seen && eram0 != 0x80 {
@@ -63,7 +61,7 @@ fn run_one(path string, max_inst u32) {
 		}
 	}
 
-	report(path, cpu, finished, eram_result)
+	report(path, gb.cpu, gb.mbus, ticks, finished, eram_result)
 }
 
 fn capture_eram_output(mbus &MemoryBus) string {
@@ -90,16 +88,15 @@ fn is_final_line(out string) bool {
 	return last == 'Passed' || last == 'Done' || last == 'Failed' || last == 'Passed all tests' || last.starts_with('Failed #')
 }
 
-fn report(path string, cpu CPU, finished bool, eram_result int) {
-	out := cpu.mbus.serial_buffer.bytestr()
+fn report(path string, cpu CPU, mbus &MemoryBus, ticks u32, finished bool, eram_result int) {
+	out := mbus.serial_buffer.bytestr()
 	eram_text := if out.len == 0 {
-		capture_eram_output(cpu.mbus)
+		capture_eram_output(mbus)
 	} else {
 		''
 	}
 
 	status := if finished || eram_result >= 0 { 'DONE' } else { 'TIMEOUT' }
-
 	println('')
 	println('${os.file_name(path)} [${status}]')
 	if out.len > 0 {
@@ -109,7 +106,8 @@ fn report(path string, cpu CPU, finished bool, eram_result int) {
 	} else {
 		println('(no serial output)')
 	}
-	println('instructions executed: ${cpu.ic}\n')
+	println('instructions executed: ${cpu.ic}')
+	println('cpu ticks: ${ticks}\n')
 
 	lines := out.split_into_lines().filter(|l| l.trim_space() != '')
 	if lines.len > 0 {

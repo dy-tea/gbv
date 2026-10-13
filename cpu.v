@@ -23,6 +23,12 @@ mut:
 	halt_type      CPUHaltType = .none
 }
 
+fn CPU.new(mbus &MemoryBus) &CPU {
+	return &CPU{
+		mbus: mbus
+	}
+}
+
 fn (mut cpu CPU) reset() {
 	cpu.r.af = 0x01B0
 	cpu.r.bc = 0x0013
@@ -69,7 +75,8 @@ fn (mut cpu CPU) execute() {
 }
 
 fn (mut cpu CPU) advance_clocks(clocks u8) {
-	cpu.mbus.timer.advance_clocks(mut cpu, clocks)
+	cpu.mbus.timer.advance_clocks(clocks)
+	cpu.mbus.ppu.advance_clocks(clocks)
 	cpu.clocks += clocks
 
 	if cpu.interrupt_data.enable_ime_delay > 0 {

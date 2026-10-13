@@ -19,13 +19,10 @@ enum CPUHaltType {
 
 struct Timer {
 mut:
+	mbus            &MemoryBus
 	r               &TimerRegisters
 	sysclk          u16 = 0xabcc // after bootrom
 	interrupt_delay u8
-	iflag           &u8
-	ly              &u8
-	lcdc            &u8
-	ly_counter      u32
 }
 
 fn (mut t Timer) reset() {
@@ -69,21 +66,17 @@ fn (mut t Timer) increase_div(cycles u8) {
 	}
 }
 
-fn (mut t Timer) advance_clocks(mut cpu CPU, cycles u8) {
+fn (mut t Timer) advance_clocks(cycles u8) {
 	if t.interrupt_delay > 0 {
 		for _ in 0 .. cycles {
 			t.interrupt_delay--
 			if t.interrupt_delay == 0 {
-				cpu.mbus.interrupt_raise_flag(u8(InterruptFlag.timer))
+				t.mbus.interrupt_raise_flag(.timer)
 				break
 			}
 		}
 	}
-	if cpu.halt_type == .stop {
-		return
-	}
 	t.increase_div(cycles)
-	t.update_ly(mut cpu, cycles)
 }
 
 fn (mut t Timer) on_div_write(_value u8) {
@@ -98,22 +91,5 @@ fn (mut t Timer) tick_tima() {
 	} else {
 		t.r.tima = t.r.tma
 		t.interrupt_delay = 4
-	}
-}
-
-fn (mut t Timer) update_ly(mut cpu CPU, cycles u8) {
-	if *t.lcdc & 0x80 == 0 {
-		return
-	}
-	t.ly_counter += u32(cycles)
-	for t.ly_counter >= 456 {
-		t.ly_counter -= 456
-		old_ly := *t.ly
-		unsafe {
-			*t.ly = (*t.ly + 1) % 154
-		}
-		if old_ly == 143 && *t.ly == 144 {
-			unsafe { *t.iflag |= u8(InterruptFlag.vblank) }
-		}
 	}
 }

@@ -25,9 +25,8 @@ struct CartHeader {
 }
 
 fn (c CartHeader) str() string {
-	title := c.title.map(|h| rune(h)).string()
-	entry_point := c.entry_point.map(|c| c.hex()).join('')
-
+	title := c.title[..].bytestr()
+	entry_point := c.entry_point[..].hex()
 	return 'Entry point: 0x${entry_point}
 Title: ${title}
 CGB Flag: 0x${c.cgb_flag:x}

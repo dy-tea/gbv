@@ -9,3 +9,8 @@ fn check_bit[T](number T, bit usize) bool {
 fn clear_bit[T](number T, bit usize) T {
 	return number & ~(1 << bit)
 }
+
+@[inline]
+fn change_bit[T](number T, value T, bit usize) T {
+	return number ^ ((-value ^ number) & (1 << bit))
+}

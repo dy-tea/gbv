@@ -4,18 +4,40 @@ import gg
 import os
 
 struct App {
-	data []u8
 mut:
-	gg  gg.Context
-	cpu CPU
+	gg gg.Context
+	gb &GB
 }
 
 fn frame(mut app App) {
 	app.gg.begin()
-
-	app.cpu.tick()
-
+	app.gb.run_until_vblank()
+	present(&app.gg, app.gb.ppu)
 	app.gg.end()
+}
+
+fn on_key_down(key gg.KeyCode, _modifier gg.Modifier, data voidptr) {
+	on_key(key, true, data)
+}
+
+fn on_key_up(key gg.KeyCode, _modifier gg.Modifier, data voidptr) {
+	on_key(key, false, data)
+}
+
+fn on_key(key gg.KeyCode, pressed bool, data voidptr) {
+	mut app := unsafe { &App(data) }
+	mut joypad := app.gb.joypad
+	match key {
+		.a { joypad.on_button_a(pressed) }
+		.s { joypad.on_button_b(pressed) }
+		.enter { joypad.on_button_start(pressed) }
+		.space { joypad.on_button_select(pressed) }
+		.right { joypad.on_button_right(pressed) }
+		.left { joypad.on_button_left(pressed) }
+		.up { joypad.on_button_up(pressed) }
+		.down { joypad.on_button_down(pressed) }
+		else {}
+	}
 }
 
 fn main() {
@@ -33,26 +55,22 @@ fn main() {
 		return
 	}
 	data, cart_header := cart_load(os.args[1])!
-	mut mbus := MemoryBus.new(data)
-	mbus.cart_header = cart_header
 	mut app := &App{
-		cpu:  CPU{
-			mbus: mbus
-		}
-		data: data
+		gb: GB.new(data, cart_header)
 	}
 
 	app.gg = gg.new_context(
-		bg_color:     gg.rgb(0, 0, 0)
-		width:        600
-		height:       400
+		bg_color:     ppu_lcd_color_lit
+		width:        lcd_pixels_width * ppu_render_scale
+		height:       lcd_pixels_height * ppu_render_scale
 		window_title: 'GBV'
 		frame_fn:     frame
+		keydown_fn:   on_key_down
+		keyup_fn:     on_key_up
 		user_data:    app
 	)
 
-	app.cpu.reset()
-	app.cpu.mbus.timer.reset()
+	app.gb.reset()
 
 	app.gg.run()
 }
