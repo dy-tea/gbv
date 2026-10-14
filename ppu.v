@@ -27,7 +27,7 @@ mut:
 
 struct PPU {
 mut:
-	r                            &LCDRegisters
+	r                            LCDRegisters
 	mbus                         &MemoryBus
 	frame_pixels                 [lcd_pixels_width * lcd_pixels_height]u8
 	sprite_palette_0             [4]u8 = [..]u8[0, 1, 2, 3]
@@ -59,7 +59,51 @@ mut:
 fn PPU.new(mbus &MemoryBus) &PPU {
 	return &PPU{
 		mbus: mbus
-		r:    unsafe { &LCDRegisters(&u8(mbus.memory) + 0xFF40) }
+	}
+}
+
+fn (p PPU) read_register(addr u16) u8 {
+	return match addr {
+		0xff40 { p.r.control }
+		0xff41 { p.r.status }
+		0xff42 { p.r.scy }
+		0xff43 { p.r.scx }
+		0xff44 { p.r.ly }
+		0xff45 { p.r.lyc }
+		0xff46 { p.r.oam_daa }
+		0xff47 { p.r.bgp }
+		0xff48 { p.r.obp0 }
+		0xff49 { p.r.obp1 }
+		0xff4a { p.r.wy }
+		0xff4b { p.r.wx }
+		else { 0 }
+	}
+}
+
+fn (mut p PPU) write_register(addr u16, val u8) {
+	match addr {
+		0xff40 { p.on_lcd_control_write(val) }
+		0xff41 { p.on_lcd_status_write(val) }
+		0xff44 {} // LCD Y Coordinate, read only
+		0xff45 { p.on_lyc_write(val) }
+		0xff46 { p.r.oam_daa = val }
+		0xff47 {
+			p.r.bgp = val
+			p.on_palette_write(addr, val)
+		}
+		0xff48 {
+			p.r.obp0 = val
+			p.on_palette_write(addr, val)
+		}
+		0xff49 {
+			p.r.obp1 = val
+			p.on_palette_write(addr, val)
+		}
+		0xff42 { p.r.scy = val }
+		0xff43 { p.r.scx = val }
+		0xff4a { p.r.wy = val }
+		0xff4b { p.r.wx = val }
+		else {}
 	}
 }
 
@@ -232,25 +276,37 @@ fn (mut p PPU) on_lcd_status_write(value u8) {
 	p.check_stat_signal()
 }
 
-fn (mut p PPU) extract_palette(addr u16) [4]u8 {
-	unsafe {
-		pal := p.mbus.memory[addr]
-		return [4]u8[
-			pal & 0b00000011,
-			(pal & 0b00001100) >> 2,
-			(pal & 0b00110000) >> 4,
-			(pal & 0b11000000) >> 6,
-		]
+fn extract_palette(pal u8) [4]u8 {
+	return [4]u8[
+		pal & 0b00000011,
+		(pal & 0b00001100) >> 2,
+		(pal & 0b00110000) >> 4,
+		(pal & 0b11000000) >> 6,
+	]
+}
+
+fn (mut p PPU) on_palette_write(addr u16, val u8) {
+	match addr {
+		0xff47 {
+			p.background_palette = extract_palette(val)
+		}
+		0xff48 {
+			p.sprite_palette_0 = extract_palette(val)
+		}
+		0xff49 {
+			p.sprite_palette_1 = extract_palette(val)
+		}
+		else {}
 	}
 }
 
-fn (mut p PPU) on_palette_write(addr u16) {
-	if addr == 0xff47 {
-		p.background_palette = p.extract_palette(addr)
-	} else if addr == 0xff48 {
-		p.sprite_palette_0 = p.extract_palette(addr)
-	} else if addr == 0xff49 {
-		p.sprite_palette_1 = p.extract_palette(addr)
+fn (p PPU) oam_sprite(oam_id u8) ObjectAttributeData {
+	base := usize(object_attribute_address) + usize(oam_id)
+	return ObjectAttributeData{
+		pos_y:   p.mbus.memory[base]
+		pos_x:   p.mbus.memory[base + 1]
+		tile_id: p.mbus.memory[base + 2]
+		flags:   p.mbus.memory[base + 3]
 	}
 }
 
@@ -259,10 +315,9 @@ fn (mut p PPU) oam_search_tick() {
 		return
 	}
 
-	oam_sprite_data := unsafe { &u8(p.mbus.memory) + object_attribute_address }
 	sprite_height := if p.r.lcdc_sprite_size() { 16 } else { 8 }
 	attribute_data_index := p.oam_search_index * 4
-	sprite := unsafe { &ObjectAttributeData(oam_sprite_data + attribute_data_index) }
+	sprite := p.oam_sprite(attribute_data_index)
 	pos_y := sprite.pos_y
 	ly := p.r.ly + 16
 	if sprite.pos_x > 0 && ly >= pos_y && ly < pos_y + sprite_height {
@@ -280,8 +335,7 @@ fn (mut p PPU) fetcher_tick() {
 	match p.fetcher_internal_clock {
 		2 {
 			if p.fetcher_sprite_active {
-				oam_sprite_data := unsafe { &u8(p.mbus.memory) + object_attribute_address }
-				sprite := unsafe { &ObjectAttributeData(oam_sprite_data + p.oam_buffer[p.oam_sprite_fetcher_index].oam_id) }
+				sprite := p.oam_sprite(p.oam_buffer[p.oam_sprite_fetcher_index].oam_id)
 				p.fetcher_tile_no = sprite.tile_id
 			} else {
 				if !p.fetcher_window_pixels || !p.r.lcdc_window_enable() {
@@ -290,22 +344,20 @@ fn (mut p PPU) fetcher_tick() {
 					} else {
 						0x9800
 					}
-					tile_map_data := unsafe { &u8(p.mbus.memory + offset) }
 					tile_x_offset := u16((p.fetcher_internal_x_pos + (p.r.scx / 8)) & 0x1f)
 					tile_y_offset := u16(32 * (((p.r.ly + p.r.scy) & 0xff) / 8))
 					tile_address := (tile_x_offset + tile_y_offset) & 0x3ff
-					p.fetcher_tile_no = unsafe { tile_map_data[tile_address] }
+					p.fetcher_tile_no = p.mbus.memory[offset + tile_address]
 				} else {
 					offset := if p.r.lcdc_window_tile_map_select() {
 						0x9C00
 					} else {
 						0x9800
 					}
-					tile_map_data := unsafe { &u8(p.mbus.memory + offset) }
 					tile_x_offset := p.fetcher_internal_x_pos
 					tile_y_offset := u16(32 * (p.fetcher_window_line_counter / 8))
 					tile_address := (tile_x_offset + tile_y_offset) & 0x3ff
-					p.fetcher_tile_no = unsafe { tile_map_data[tile_address] }
+					p.fetcher_tile_no = p.mbus.memory[offset + tile_address]
 				}
 			}
 		}
@@ -313,8 +365,7 @@ fn (mut p PPU) fetcher_tick() {
 			high_byte := p.fetcher_internal_clock == 6
 			high_byte_offset := if high_byte { 1 } else { 0 }
 			if p.fetcher_sprite_active {
-				oam_sprite_data := unsafe { &u8(p.mbus.memory + object_attribute_address) }
-				sprite := unsafe { &ObjectAttributeData(oam_sprite_data + p.oam_buffer[p.oam_sprite_fetcher_index].oam_id) }
+				sprite := p.oam_sprite(p.oam_buffer[p.oam_sprite_fetcher_index].oam_id)
 				flip_y := check_bit(sprite.flags, 6)
 				flip_offset := if p.r.lcdc_sprite_size() { 30 } else { 14 }
 				vertical_offset := 2 * (p.r.ly - (sprite.pos_y - 16))
@@ -324,7 +375,7 @@ fn (mut p PPU) fetcher_tick() {
 					i32(vertical_offset)
 				}
 				addr := 0x8000 + i32(p.fetcher_tile_no) * 16 + offset + high_byte_offset
-				p.fetcher_tile_data[int(high_byte)] = unsafe { p.mbus.memory[addr] }
+				p.fetcher_tile_data[int(high_byte)] = p.mbus.memory[addr]
 			} else {
 				data_select_offset := if p.r.lcdc_tile_data_select() { 0x8000 } else { 0x9000 }
 				tile_index := if p.r.lcdc_tile_data_select() {
@@ -338,15 +389,14 @@ fn (mut p PPU) fetcher_tick() {
 					i32(2 * (p.fetcher_window_line_counter % 8))
 				}
 				addr := data_select_offset + tile_index * 16 + row_offset + high_byte_offset
-				p.fetcher_tile_data[int(high_byte)] = unsafe { p.mbus.memory[addr] }
+				p.fetcher_tile_data[int(high_byte)] = p.mbus.memory[addr]
 			}
 		}
 		else {}
 	}
 	if p.fetcher_internal_clock >= 6 {
 		if p.fetcher_sprite_active {
-			oam_sprite_data := unsafe { &u8(p.mbus.memory + object_attribute_address) }
-			sprite := unsafe { &ObjectAttributeData(oam_sprite_data + p.oam_buffer[p.oam_sprite_fetcher_index].oam_id) }
+			sprite := p.oam_sprite(p.oam_buffer[p.oam_sprite_fetcher_index].oam_id)
 			sprite_uses_palette_1 := check_bit(sprite.flags, 4)
 			sprite_flip_x := check_bit(sprite.flags, 5)
 			sprite_bg_priority := check_bit(sprite.flags, 7)
@@ -400,10 +450,9 @@ fn (mut p PPU) shifter_tick() {
 	}
 
 	if p.r.lcdc_sprite_enable() && p.oam_buffer_count > 0 {
-		oam_sprite_data := unsafe { &u8(p.mbus.memory + object_attribute_address) }
 		for i in 0 .. 10 {
 			if p.oam_buffer[i].drawn { continue }
-			sprite := unsafe { &ObjectAttributeData(oam_sprite_data + p.oam_buffer[i].oam_id) }
+			sprite := p.oam_sprite(p.oam_buffer[i].oam_id)
 			if sprite.pos_x <= p.shifter_pixel_x + 8 && sprite.pos_x > p.shifter_pixel_x {
 				p.oam_sprite_fetcher_index = i
 				p.fetcher_internal_clock = 0

@@ -32,11 +32,11 @@ fn (mut j Joypad) reset() {
 	j.left = false
 	j.up = false
 	j.down = false
-	unsafe { j.mbus.memory[joypad_register_address] = joypad_register_reset }
+	j.mbus.memory[joypad_register_address] = joypad_register_reset
 }
 
 fn (mut j Joypad) read_input() u8 {
-	mut register := unsafe { u8(j.mbus.memory[joypad_register_address]) }
+	mut register := j.mbus.memory[joypad_register_address]
 	register |= 0b11000000
 	register &= 0xf0
 	action_buttons := check_bit(register, 5)
@@ -54,17 +54,17 @@ fn (mut j Joypad) read_input() u8 {
 		register = change_bit(register, u8(!j.left), 1)
 		register = change_bit(register, u8(!j.right), 0)
 	}
-	unsafe { j.mbus.memory[joypad_register_address] = register }
+	j.mbus.memory[joypad_register_address] = register
 	return register
 }
 
 fn (mut j Joypad) write_input(flags u8) {
-	mut register := unsafe { u8(j.mbus.memory[joypad_register_address]) }
+	mut register := j.mbus.memory[joypad_register_address]
 	action_buttons := check_bit(flags, 5)
 	direction_buttons := check_bit(flags, 4)
 	register = change_bit(register, u8(action_buttons), 5)
 	register = change_bit(register, u8(direction_buttons), 4)
-	unsafe { j.mbus.memory[joypad_register_address] = register }
+	j.mbus.memory[joypad_register_address] = register
 }
 
 fn (mut j Joypad) button_check(button bool, pressed bool, flag bool) bool {
@@ -78,12 +78,12 @@ fn (mut j Joypad) button_check(button bool, pressed bool, flag bool) bool {
 }
 
 fn (mut j Joypad) on_action_button(button bool, pressed bool) bool {
-	action_buttons_flag := check_bit(unsafe { j.mbus.memory[joypad_register_address] }, 5)
+	action_buttons_flag := check_bit(j.mbus.memory[joypad_register_address], 5)
 	return j.button_check(button, pressed, action_buttons_flag)
 }
 
 fn (mut j Joypad) on_direction_button(button bool, pressed bool) bool {
-	direction_buttons_flag := check_bit(unsafe { j.mbus.memory[joypad_register_address] }, 4)
+	direction_buttons_flag := check_bit(j.mbus.memory[joypad_register_address], 4)
 	return j.button_check(button, pressed, direction_buttons_flag)
 }
 

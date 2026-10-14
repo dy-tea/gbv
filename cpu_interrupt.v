@@ -17,8 +17,8 @@ fn (mut cpu CPU) interrupt_jump_to(addr u16) {
 }
 
 fn (mut cpu CPU) interrupt_service_routine() {
-	interrupt_enable := unsafe { cpu.mbus.memory[addr_io_ie] }
-	interrupt_flag := unsafe { cpu.mbus.memory[addr_io_if] }
+	interrupt_enable := cpu.mbus.memory[addr_io_ie]
+	interrupt_flag := cpu.mbus.memory[addr_io_if]
 	interrupt_pending := (interrupt_enable & interrupt_flag) & 0x1F != 0
 
 	if interrupt_pending {
@@ -46,19 +46,19 @@ fn (mut cpu CPU) interrupt_service_routine() {
 		flag_joypad := check_bit(interrupt_flag, 4)
 
 		if enable_vblank && flag_vblank {
-			cpu.mbus.interrupt_flag_write(clear_bit(unsafe { cpu.mbus.memory[addr_io_if] }, 0))
+			cpu.mbus.interrupt_flag_write(clear_bit(cpu.mbus.memory[addr_io_if], 0))
 			cpu.interrupt_jump_to(interrupt_handler_vblank)
 		} else if enable_lcd_stat && flag_lcd_stat {
-			cpu.mbus.interrupt_flag_write(clear_bit(unsafe { cpu.mbus.memory[addr_io_if] }, 1))
+			cpu.mbus.interrupt_flag_write(clear_bit(cpu.mbus.memory[addr_io_if], 1))
 			cpu.interrupt_jump_to(interrupt_handler_lcd_stat)
 		} else if enable_timer && flag_timer {
-			cpu.mbus.interrupt_flag_write(clear_bit(unsafe { cpu.mbus.memory[addr_io_if] }, 2))
+			cpu.mbus.interrupt_flag_write(clear_bit(cpu.mbus.memory[addr_io_if], 2))
 			cpu.interrupt_jump_to(interrupt_handler_timer)
 		} else if enable_serial && flag_serial {
-			cpu.mbus.interrupt_flag_write(clear_bit(unsafe { cpu.mbus.memory[addr_io_if] }, 3))
+			cpu.mbus.interrupt_flag_write(clear_bit(cpu.mbus.memory[addr_io_if], 3))
 			cpu.interrupt_jump_to(interrupt_handler_serial)
 		} else if enable_joypad && flag_joypad {
-			cpu.mbus.interrupt_flag_write(clear_bit(unsafe { cpu.mbus.memory[addr_io_if] }, 4))
+			cpu.mbus.interrupt_flag_write(clear_bit(cpu.mbus.memory[addr_io_if], 4))
 			cpu.interrupt_jump_to(interrupt_handler_joypad)
 		}
 	}

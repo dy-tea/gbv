@@ -20,9 +20,29 @@ enum CPUHaltType {
 struct Timer {
 mut:
 	mbus            &MemoryBus
-	r               &TimerRegisters
+	r               TimerRegisters
 	sysclk          u16 = 0xabcc // after bootrom
 	interrupt_delay u8
+}
+
+fn (t Timer) read_register(addr u16) u8 {
+	return match addr {
+		0xff04 { t.r.div }
+		0xff05 { t.r.tima }
+		0xff06 { t.r.tma }
+		0xff07 { t.r.tac }
+		else { 0 }
+	}
+}
+
+fn (mut t Timer) write_register(addr u16, val u8) {
+	match addr {
+		0xff04 { t.on_div_write(val) }
+		0xff07 { t.r.tac = val & 0b00000111 }
+		0xff05 { t.r.tima = val }
+		0xff06 { t.r.tma = val }
+		else {}
+	}
 }
 
 fn (mut t Timer) reset() {

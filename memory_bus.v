@@ -3,11 +3,13 @@ module main
 const addr_io_if = 0xff0f // interrupt flag
 const addr_io_ie = 0xffff // interrupt enable
 
+const memory_size = 0x10000
+
 @[heap; noinit]
 struct MemoryBus {
 	data []u8
 mut:
-	memory              &u8
+	memory              [memory_size]u8
 	ppu                 &PPU
 	joypad              &Joypad
 	timer               Timer
@@ -23,17 +25,15 @@ mut:
 }
 
 fn MemoryBus.new(data []u8, header CartHeader) &MemoryBus {
-	memory := unsafe { C.malloc(1024 * 64 * 8) }
 	mut mb := &MemoryBus{
 		data:           data
-		memory:         memory
 		ppu:            unsafe { nil }
 		joypad:         unsafe { nil }
 		cart_header:    header
 		serial_capture: false
 		serial_buffer:  []u8{}
 		timer:          Timer{
-			r:    unsafe { &TimerRegisters(&u8(memory) + 0xff04) }
+			r:    TimerRegisters{}
 			mbus: unsafe { nil }
 		}
 	}
@@ -42,15 +42,15 @@ fn MemoryBus.new(data []u8, header CartHeader) &MemoryBus {
 }
 
 fn (mut mb MemoryBus) interrupt_enable_write(value u8) {
-	unsafe { mb.memory[addr_io_ie] = value }
+	mb.memory[addr_io_ie] = value
 }
 
 fn (mut mb MemoryBus) interrupt_flag_write(value u8) {
-	unsafe { mb.memory[addr_io_if] = value }
+	mb.memory[addr_io_if] = value
 }
 
 fn (mut mb MemoryBus) interrupt_raise_flag(flag InterruptFlag) {
-	unsafe { mb.memory[addr_io_if] |= u8(flag) }
+	mb.memory[addr_io_if] |= u8(flag)
 }
 
 fn (mb MemoryBus) ppu_mode_is(mode LCDSMode) bool {
@@ -88,7 +88,7 @@ fn (mb MemoryBus) read(addr u16) u8 {
 			if mb.ppu_mode_is(.drawing) {
 				return 0xFF
 			}
-			unsafe { mb.memory[addr] }
+			mb.memory[addr]
 		}
 		0xA000...0xBFFF { // External RAM
 			match cart_info.type {
@@ -106,19 +106,19 @@ fn (mb MemoryBus) read(addr u16) u8 {
 			}
 		}
 		0xC000...0xCFFF { // WRAM 1
-			unsafe { mb.memory[addr] }
+			mb.memory[addr]
 		}
 		0xD000...0xDFFF { // WRAM 2
-			unsafe { mb.memory[addr] }
+			mb.memory[addr]
 		}
 		0xE000...0xFDFF { // Echo RAM
-			unsafe { mb.memory[addr - 0x2000] }
+			mb.memory[addr - 0x2000]
 		}
 		0xFE00...0xFE9F { // Object Attribute Memory
 			if mb.ppu_owns_oam() {
 				return 0xFF
 			}
-			unsafe { mb.memory[addr] }
+			mb.memory[addr]
 		}
 		0xFEA0...0xFEFF { // Unused
 			if mb.ppu_mode_is(.drawing) {
@@ -131,19 +131,25 @@ fn (mb MemoryBus) read(addr u16) u8 {
 				0xFF00 { // Joypad
 					mb.joypad.read_input()
 				}
+				0xFF04...0xFF07 { // Timer
+					mb.timer.read_register(addr)
+				}
+				0xFF40...0xFF4B { // LCD Registers
+					mb.ppu.read_register(addr)
+				}
 				else {
-					unsafe { mb.memory[addr] }
+					mb.memory[addr]
 				}
 			}
 		}
 		0xFF80...0xFFFE { // High RAM
-			unsafe { mb.memory[addr] }
+			mb.memory[addr]
 		}
 		0xFFFF { // Interrupt Enable Register
-			unsafe { mb.memory[addr] }
+			mb.memory[addr]
 		}
 		else {
-			unsafe { mb.memory[addr] }
+			mb.memory[addr]
 		}
 	}
 }
@@ -180,7 +186,7 @@ fn (mut mb MemoryBus) write(addr u16, val u8) {
 			if mb.ppu_mode_is(.drawing) {
 				return
 			}
-			unsafe { mb.memory[addr] = val }
+			mb.memory[addr] = val
 		}
 		0xA000...0xBFFF { // ERAM
 			match cart_info.type {
@@ -199,19 +205,19 @@ fn (mut mb MemoryBus) write(addr u16, val u8) {
 			}
 		}
 		0xC000...0xCFFF { // WRAM 1
-			unsafe { mb.memory[addr] = val }
+			mb.memory[addr] = val
 		}
 		0xD000...0xDFFF { // WRAM 2
-			unsafe { mb.memory[addr] = val }
+			mb.memory[addr] = val
 		}
 		0xE000...0xFDFF { // Echo RAM
-			unsafe { mb.memory[addr - 0x2000] = val }
+			mb.memory[addr - 0x2000] = val
 		}
 		0xFE00...0xFE9F { // Object Attribute Memory
 			if mb.ppu_owns_oam() {
 				return
 			}
-			unsafe { mb.memory[addr] = val }
+			mb.memory[addr] = val
 		}
 		0xFEA0...0xFEFF {} // Unused
 		0xFF00...0xFF7F { // I/O Registers
@@ -220,60 +226,46 @@ fn (mut mb MemoryBus) write(addr u16, val u8) {
 					mb.joypad.write_input(val)
 				}
 				0xFF01 { // Serial Data
-					unsafe { mb.memory[addr] = val }
+					mb.memory[addr] = val
 				}
 				0xFF02 { // Serial Control
 					if val == 0x81 && mb.serial_capture {
-						mb.serial_buffer << unsafe { mb.memory[0xff01] }
+						mb.serial_buffer << mb.memory[0xff01]
 					}
 				}
-				0xFF04 { // Timer DIV
-					mb.timer.on_div_write(val)
-				}
-				0xFF07 { // Timer Control
-					unsafe { mb.memory[addr] = val & 0b00000111 }
+				0xFF04...0xFF07 { // Timer
+					mb.timer.write_register(addr, val)
 				}
 				0xFF0F { // Interrupt Flag
 					mb.interrupt_flag_write(val & 0x1F)
 				}
-				0xFF40 { // LCD Control
-					mb.ppu.on_lcd_control_write(val)
-				}
-				0xFF41 { // LCD Status
-					mb.ppu.on_lcd_status_write(val)
-				}
-				0xFF44 { // LCD Y Coordinate, read only
-				}
-				0xFF45 { // LCD Y Compare
-					mb.ppu.on_lyc_write(val)
+				0xFF40...0xFF45 { // LCD Registers
+					mb.ppu.write_register(addr, val)
 				}
 				0xFF46 { // OEM DMA
 					source_addr := u16(val * 0x100)
 					dest := 0xFE00
 					for i in 0 .. 160 {
-						unsafe {
-							mb.memory[dest + i] = mb.read(source_addr + u16(i))
-						}
+						mb.memory[dest + i] = mb.read(source_addr + u16(i))
 					}
-					unsafe { mb.memory[addr] = val }
+					mb.ppu.write_register(addr, val)
 				}
-				0xFF47...0xFF49 { // Palettes
-					unsafe { mb.memory[addr] = val }
-					mb.ppu.on_palette_write(addr)
+				0xFF47...0xFF4B { // LCD Registers
+					mb.ppu.write_register(addr, val)
 				}
 				else {
-					unsafe { mb.memory[addr] = val }
+					mb.memory[addr] = val
 				}
 			}
 		}
 		0xFF80...0xFFFE { // HRAM
-			unsafe { mb.memory[addr] = val }
+			mb.memory[addr] = val
 		}
 		0xFFFF { // Interrupt Enable
 			mb.interrupt_enable_write(val)
 		}
 		else {
-			unsafe { mb.memory[addr] = val }
+			mb.memory[addr] = val
 		}
 	}
 }

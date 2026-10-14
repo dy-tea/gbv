@@ -25,7 +25,7 @@ fn on_key_up(key gg.KeyCode, _modifier gg.Modifier, data voidptr) {
 }
 
 fn on_key(key gg.KeyCode, pressed bool, data voidptr) {
-	mut app := unsafe { &App(data) }
+	mut app := &App(data)
 	mut joypad := app.gb.joypad
 	match key {
 		.a { joypad.on_button_a(pressed) }

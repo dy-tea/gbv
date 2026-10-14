@@ -8,8 +8,13 @@ enum LCDSMode as u8 {
 }
 
 fn LCDSMode.new(val u8) LCDSMode {
-	assert val < 4
-	return unsafe { LCDSMode(val) }
+	return match val {
+		0 { .h_blank }
+		1 { .v_blank }
+		2 { .oam_search }
+		3 { .drawing }
+		else { panic('invalid LCDSMode: ${val}') }
+	}
 }
 
 @[inline]

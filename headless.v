@@ -51,7 +51,7 @@ fn run_one(path string, max_inst u32) {
 		finished = finished && out.len == out_len
 
 		if !finished {
-			eram0 := unsafe { gb.mbus.eram[0] }
+			eram0 := gb.mbus.eram[0]
 			if eram0 == 0x80 {
 				eram_init_seen = true
 			} else if eram_init_seen && eram0 != 0x80 {
